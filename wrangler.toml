@@ -1,0 +1,11 @@
+name = "clearscan"
+main = "./cloudflare-worker.js"
+compatibility_date = "2026-06-19"
+
+[assets]
+directory = "./app"
+
+[[routes]]
+pattern = "www.greenscan.us/*"
+zone_name = "greenscan.us"
+

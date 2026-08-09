@@ -1,0 +1,23 @@
+name = "clearscan-api"
+main = "./cloudflare-worker.js"
+compatibility_date = "2026-06-19"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
+persist = true
+
+[[kv_namespaces]]
+binding = "PRODUCT_CACHE"
+id = "e15cf9dbe7d241bf8e131df3fc1d364f"
+

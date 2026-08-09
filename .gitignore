@@ -1,0 +1,56 @@
+# Environment and local secrets
+.env
+.env.*
+*.env
+*.local
+*.secret
+*.secrets
+*secret*
+*secrets*
+*api-key*
+*apikey*
+*token*
+*credentials*
+*client-secret*
+*cloudflare-key*
+*cloudflare-token*
+*cloudflare-secret*
+*openai-key*
+*openai-token*
+*openai-secret*
+*google-client-secret*
+!.gitignore
+
+# Dependencies
+node_modules/
+
+# Cloudflare / Wrangler local state
+.wrangler/
+wrangler.log
+wrangler-logs/
+wrangler-cache/
+wrangler/logs/
+wrangler/cache/
+logs/
+cache/
+
+# Build and package output
+dist/
+build/
+out/
+.next/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*.tmp
+*.temp
+*.log
+.vscode/
+.idea/

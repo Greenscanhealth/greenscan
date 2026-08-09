@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GreenScan - Free Ingredient Safety Scanner</title>
+    <meta name="description" content="GreenScan is a free barcode and ingredient safety scanner for food, drinks, beauty, and hair products. Review ingredients, nutrition, positives, potential concerns, and safety scores." />
+    <link rel="canonical" href="https://greenscan.us/" />
+    <meta property="og:title" content="GreenScan - Free Ingredient Safety Scanner" />
+    <meta property="og:description" content="GreenScan helps shoppers review food, drink, beauty, and hair product ingredients with clear safety scores, positives, and potential concern notes." />
+    <meta property="og:url" content="https://greenscan.us/" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" type="image/svg+xml" href="./greenscan-logo.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="GreenScan" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0f1f16" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "GreenScan",
+        "url": "https://greenscan.us/",
+        "applicationCategory": "HealthApplication",
+        "operatingSystem": "Web",
+        "description": "GreenScan is a free barcode and ingredient safety scanner for food, drinks, beauty, and hair products. Review ingredients, nutrition, positives, potential concerns, and simple safety scores.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="theme-dark">
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div>
+            <p class="eyebrow">Ingredient safety</p>
+            <h1>GreenScan</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button app-menu-button" id="topMenuButton" type="button" aria-label="Open app menu" title="Menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="5" cy="5" r="1.6" /><circle cx="12" cy="5" r="1.6" /><circle cx="19" cy="5" r="1.6" />
+              <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
+              <circle cx="5" cy="19" r="1.6" /><circle cx="12" cy="19" r="1.6" /><circle cx="19" cy="19" r="1.6" />
+            </svg>
+            <span class="notification-dot hidden" id="notificationDot"></span>
+          </button>
+          <div class="top-menu hidden" id="topMenu">
+            <button class="menu-action" id="notificationButton" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>
+              Notifications
+            </button>
+            <button class="menu-action" id="settingsButton" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 0 1-4 0v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.65 8.94a1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.08 4.17l.06.06a1.7 1.7 0 0 0 1.88.34H9a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.88V9c.25.6.83.99 1.48.99H21a2 2 0 0 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z" />
+              </svg>
+              Settings
+            </button>
+            <button class="menu-action hidden" id="adminMenuButton" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.4 8.4 8 9 4.6-.6 8-4 8-9V6l-8-3Z" /><path d="M9 12l2 2 4-5" /></svg>
+              Admin Panel
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section class="app-description-panel" aria-label="About GreenScan">
+        <p>GreenScan is a free barcode and ingredient safety scanner for food, drinks, beauty, and hair products. Scan or search products to review ingredients, nutrition, positives, potential concerns, and a simple safety score.</p>
+      </section>
+
+      <section class="free-share-panel" aria-label="GreenScan is free">
+        <div class="free-share-copy">
+          <span class="free-share-icon" aria-hidden="true">$</span>
+          <div>
+            <p class="eyebrow">We are free</p>
+            <h2>Our only ad is word of mouth.</h2>
+          </div>
+        </div>
+        <button type="button" class="secondary-button compact-action" id="shareSiteButton">Share GreenScan</button>
+      </section>
+
+      <section class="signin-prompt-panel hidden" id="signinPromptPanel" aria-label="Sign in with Google">
+        <div>
+          <p class="eyebrow">Account</p>
+          <h2>Sign in with Google to see searches, history, and a higher limit</h2>
+        </div>
+        <button type="button" class="google-button compact" id="signinPromptButton">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.3 0 6.3 1.1 8.6 3.3l6.4-6.4C35.1 2.8 29.8.5 24 .5 14.6.5 6.5 5.9 2.6 13.7l7.9 6.1C12.3 13.8 17.7 9.5 24 9.5Z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-2.8-.4-4.1H24v8.4h13c-.3 2.1-1.7 5.2-4.9 7.3l7.6 5.9c4.5-4.2 6.8-10.3 6.8-17.5Z"/><path fill="#FBBC05" d="M10.5 28.2A14.7 14.7 0 0 1 10 24c0-1.4.2-2.8.5-4.2l-7.9-6.1A23.5 23.5 0 0 0 .1 24c0 3.7.9 7.2 2.5 10.3l7.9-6.1Z"/><path fill="#34A853" d="M24 47.5c5.8 0 10.7-1.9 14.3-5.2l-7.6-5.9c-2 1.4-4.8 2.4-8.7 2.4-6.3 0-11.7-4.2-13.6-10l-7.9 6.1C6.5 42.1 14.6 47.5 24 47.5Z"/></svg>
+          Sign in
+        </button>
+      </section>
+
+      <section class="onboarding-panel hidden" id="onboardingPanel" aria-label="How GreenScan works" data-nosnippet>
+        <div class="onboarding-card">
+          <strong>1. Scan barcode</strong>
+          <span>GreenScan checks saved and open databases first.</span>
+        </div>
+        <div class="onboarding-card">
+          <strong>2. Add label photo</strong>
+          <span>If missing, upload the ingredient label for AI analysis.</span>
+        </div>
+        <div class="onboarding-card">
+          <strong>3. Sign in</strong>
+          <span>Save history and get higher daily limits.</span>
+        </div>
+        <button type="button" class="ghost-button" id="dismissOnboardingButton">Got it</button>
+      </section>
+
+      <section class="scan-panel" aria-label="Scan product">
+        <div class="scanner-viewport">
+          <video id="cameraFeed" playsinline muted></video>
+          <div class="scanner-heading" aria-hidden="true">
+            <strong>Scan a product</strong>
+            <span>Center the barcode and hold steady</span>
+          </div>
+          <div class="camera-tools">
+            <button type="button" class="camera-tool-button sound-toggle" id="soundToggleButton" aria-label="Mute scan sound" title="Mute scan sound">
+              <svg class="sound-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /><path d="M18.5 5.5a9 9 0 0 1 0 13" /></svg>
+              <svg class="sound-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z" /><path d="m22 9-6 6" /><path d="m16 9 6 6" /></svg>
+            </button>
+            <button type="button" class="camera-tool-button torch-toggle hidden" id="torchToggleButton" aria-label="Turn flashlight on" title="Turn flashlight on">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2h6" /><path d="M10 6h4" /><path d="M8 10h8l-1 11H9L8 10Z" /><path d="M12 14v3" /></svg>
+            </button>
+          </div>
+          <div class="scan-frame">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div class="scanner-empty" id="scannerEmpty">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+              <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+              <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+              <path d="M7 8v8" />
+              <path d="M11 8v8" />
+              <path d="M14 8v8" />
+              <path d="M17 8v8" />
+            </svg>
+            <p id="cameraHint">Tap Scan to start the camera.</p>
+          </div>
+        </div>
+        <button class="scan-product-preview hidden" id="scanProductPreview" type="button" aria-label="Open scanned product details">
+          <span class="scan-preview-media" id="scanPreviewMedia" aria-hidden="true"></span>
+          <span class="scan-preview-copy">
+            <strong id="scanPreviewName">Scanned product</strong>
+            <small id="scanPreviewMeta">Open product details</small>
+          </span>
+          <span class="scan-preview-score green" id="scanPreviewScore">--</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+        <div class="scan-assist hidden" id="scanAssist">
+          <div>
+            <strong id="scanAssistTitle">Finding barcode</strong>
+            <span id="scanAssistMessage">Hold the barcode inside the frame.</span>
+          </div>
+          <div class="scan-confidence" aria-hidden="true"><span id="scanConfidenceBar"></span></div>
+        </div>
+
+        <div class="controls-grid">
+          <button class="primary-button" id="startCameraButton">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" /><path d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /></svg>
+            Scan
+          </button>
+          <button class="secondary-button" id="stopCameraButton" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+            Stop
+          </button>
+        </div>
+        <div class="permission-callout hidden" id="permissionCallout">
+          <strong id="permissionTitle">Camera access is needed</strong>
+          <p id="permissionMessage">Your browser should show a camera permission prompt. Choose Allow, then tap Scan again.</p>
+        </div>
+
+        <form class="barcode-form" id="barcodeForm">
+          <label for="barcodeInput">Barcode</label>
+          <div class="input-row">
+            <input id="barcodeInput" inputmode="numeric" autocomplete="off" placeholder="Enter UPC or EAN" />
+            <button type="submit" class="icon-button submit" aria-label="Search barcode" title="Search barcode">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="result-panel" id="resultPanel" aria-live="polite">
+        <div class="empty-state">
+          <p class="eyebrow">Ready</p>
+          <h2>Scan a barcode to begin.</h2>
+          <p>Known products load from open databases first. Unknown products can be analyzed from an ingredient photo.</p>
+        </div>
+      </section>
+
+      <section class="discovery-panel" id="trendingPanel" aria-label="Trending scans">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Trending</p>
+            <h2>Most scanned products</h2>
+          </div>
+        </div>
+        <div class="mini-product-list" id="trendingList"></div>
+      </section>
+
+      <section class="discovery-panel" id="verifiedPanel" aria-label="Recently verified products">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Recently verified</p>
+            <h2>Updated listings</h2>
+          </div>
+        </div>
+        <div class="mini-product-list" id="verifiedList"></div>
+      </section>
+
+      <section class="status-panel" id="statusPanel" aria-label="GreenScan status">
+        <div>
+          <p class="eyebrow">Status</p>
+          <h2>App systems</h2>
+        </div>
+        <div class="status-list" id="statusList"></div>
+      </section>
+
+      <section class="scan-streak-panel" id="scanStreakPanel" aria-label="Scan streak"></section>
+
+      <section class="phone-qr-panel" aria-label="Open GreenScan on your phone">
+        <div>
+          <p class="eyebrow">Better on phone</p>
+          <h2>Use your phone for scanning.</h2>
+          <p>Open GreenScan on your phone for the best camera and barcode experience.</p>
+        </div>
+        <img src="./greenscan-qr.svg" alt="QR code for GreenScan" />
+        <span>Scan to open GreenScan</span>
+      </section>
+
+      <section class="home-screen-panel hidden" id="homeScreenPanel" aria-label="Add GreenScan to your home screen">
+        <p class="eyebrow">Best experience</p>
+        <h2>Add to Home Screen for best experience</h2>
+        <div class="install-tabs" role="tablist" aria-label="Home screen instructions">
+          <button type="button" class="install-tab active" data-install-platform="iphone" role="tab" aria-selected="true">iPhone</button>
+          <button type="button" class="install-tab" data-install-platform="android" role="tab" aria-selected="false">Android</button>
+        </div>
+        <ol class="install-steps" id="installSteps"></ol>
+      </section>
+
+      <section class="fallback-panel hidden" id="fallbackPanel">
+        <div>
+          <p class="eyebrow" id="fallbackEyebrow">Product not found</p>
+          <h2 id="fallbackTitle">Add an ingredient photo</h2>
+        </div>
+        <section class="product-type-panel" id="productTypePanel">
+          <p class="eyebrow">Choose product type</p>
+          <h3>Is this food / drink or beauty?</h3>
+          <div class="type-choice-grid">
+            <button type="button" class="type-choice" data-product-type="food">Food / Drink</button>
+            <button type="button" class="type-choice" data-product-type="beauty">Beauty / Hair</button>
+            <button type="button" class="type-choice" data-product-type="other">Other</button>
+          </div>
+          <div class="unsupported-product hidden" id="unsupportedProduct">
+            <span>X</span>
+            <p>GreenScan does not rate products other than food / drink and beauty.</p>
+          </div>
+        </section>
+        <div class="photo-upload-panel hidden" id="photoUploadPanel">
+          <label class="photo-drop" for="frontPhoto">
+            <input id="frontPhoto" type="file" accept="image/*" capture="environment" />
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" /><path d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /></svg>
+            <span>Take front photo with product name</span>
+            <strong class="upload-check hidden" id="frontPhotoCheck">âœ“</strong>
+          </label>
+          <img id="frontPhotoPreview" class="photo-preview hidden" alt="Front product preview" />
+          <label class="photo-drop compact" for="ingredientPhoto">
+            <input id="ingredientPhoto" type="file" accept="image/*" capture="environment" />
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" /><path d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /></svg>
+            <span id="backPhotoInstruction">Take back photo with ingredients</span>
+            <strong class="upload-check hidden" id="backPhotoCheck">âœ“</strong>
+          </label>
+          <img id="photoPreview" class="photo-preview hidden" alt="Back label preview" />
+          <label class="ingredient-text-label" for="manualIngredients">
+            <span id="manualIngredientsLabel">Ingredients</span>
+            <textarea id="manualIngredients" rows="4" placeholder="Optional: type or paste ingredients if the photo cannot be read yet"></textarea>
+          </label>
+          <section class="nutrition-facts-panel hidden" id="nutritionFactsPanel">
+            <p class="eyebrow">Nutrition Facts</p>
+            <h3>Does this include Nutrition Facts?</h3>
+            <div class="type-choice-grid compact">
+              <button type="button" class="type-choice nutrition-choice" data-nutrition-facts="yes">Yes</button>
+              <button type="button" class="type-choice nutrition-choice" data-nutrition-facts="no">No</button>
+            </div>
+          </section>
+          <button class="primary-button full" id="analyzePhotoButton" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4" /><path d="M21 12c-1 0-3-1-3-3s2-3 3-3c-1.5-2-3.5-3-6-3-4.5 0-8 3.5-8 8s3.5 8 8 8c2.5 0 4.5-1 6-3-1 0-3-1-3-3s2-3 3-3Z" /></svg>
+            Analyze label
+          </button>
+        </div>
+      </section>
+
+      <section class="landing-home-panel view-hidden" aria-label="GreenScan home">
+        <div class="landing-home">
+          <section class="landing-hero" aria-labelledby="landingHeadline">
+            <div class="landing-hero-copy">
+              <span class="landing-kicker"><span aria-hidden="true"></span> Free ingredient clarity</span>
+              <h2 id="landingHeadline">Scan smarter.<br /><em>Know what&rsquo;s inside.</em></h2>
+              <p>GreenScan helps you review food, drinks, beauty, and hair products by checking barcodes, ingredients, nutrition, positives, and potential concerns in a simple safety score.</p>
+              <div class="landing-actions">
+                <button type="button" class="landing-primary-button" id="landingScanButton">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 8v8M11 8v8M14 8v8M17 8v8" /></svg>
+                  Scan now
+                  <span aria-hidden="true">&rarr;</span>
+                </button>
+                <button type="button" class="landing-text-button" id="landingSearchButton">Search a product</button>
+              </div>
+              <div class="landing-trust-row" aria-label="GreenScan benefits">
+                <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg> No download</span>
+                <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg> Free to use</span>
+                <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg> Privacy-conscious</span>
+              </div>
+            </div>
+            <div class="landing-preview" aria-label="Example GreenScan product overview">
+              <div class="landing-preview-glow" aria-hidden="true"></div>
+              <div class="landing-preview-top">
+                <div>
+                  <small>Product overview</small>
+                  <strong>GreenScan</strong>
+                </div>
+                <span class="landing-score">86</span>
+              </div>
+              <div class="landing-preview-grid">
+                <div><span class="preview-icon nutrition" aria-hidden="true">128</span><small>Calories</small><strong>Per serving</strong></div>
+                <div><span class="preview-icon ingredients" aria-hidden="true">12</span><small>Ingredients</small><strong>Explained simply</strong></div>
+                <div><span class="preview-icon concerns" aria-hidden="true">2</span><small>Concerns</small><strong>Worth a closer look</strong></div>
+                <div><span class="preview-icon choices" aria-hidden="true">A</span><small>Better choices</small><strong>Compare options</strong></div>
+              </div>
+              <p><span aria-hidden="true"></span> One quick scan, a clearer choice.</p>
+            </div>
+          </section>
+
+          <section class="landing-features" aria-labelledby="landingFeaturesTitle">
+            <div class="landing-section-heading">
+              <span>Everything that matters</span>
+              <h3 id="landingFeaturesTitle">From label to useful answers</h3>
+              <p>Look beyond marketing claims with a quick, readable product overview.</p>
+            </div>
+            <div class="landing-feature-grid">
+              <article>
+                <span class="landing-feature-icon coral" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 20V10M10 20V4M15 20v-7M20 20V7" /></svg></span>
+                <h4>Calories &amp; nutrition</h4>
+                <p>Review the nutrition details that help you compare food and drinks.</p>
+              </article>
+              <article>
+                <span class="landing-feature-icon mint" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s7-4 7-11V5l-7-3-7 3v5c0 7 7 11 7 11Z" /><path d="m9 11 2 2 4-5" /></svg></span>
+                <h4>Ingredient safety</h4>
+                <p>Turn long ingredient lists into plain-language context you can use.</p>
+              </article>
+              <article>
+                <span class="landing-feature-icon gold" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 19h18.4L12 3Z" /><path d="M12 9v4M12 17h.01" /></svg></span>
+                <h4>Potential risks</h4>
+                <p>Spot ingredients and concerns that may deserve a closer look.</p>
+              </article>
+              <article>
+                <span class="landing-feature-icon violet" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m4 12 5 5L20 6" /><path d="M20 12a8 8 0 1 1-5-7.4" /></svg></span>
+                <h4>Better choices</h4>
+                <p>Compare products and discover options that better fit your goals.</p>
+              </article>
+            </div>
+            <div class="landing-category-bar">
+              <span><strong>One scanner.</strong> Food, drinks, beauty, and hair.</span>
+              <span>Free and privacy-conscious</span>
+            </div>
+          </section>
+
+          <section class="landing-story" aria-labelledby="landingStoryTitle">
+            <div>
+              <span class="landing-section-label">Why we built this</span>
+              <h3 id="landingStoryTitle">Product labels should not require a science degree.</h3>
+            </div>
+            <p>Shopping decisions are hard enough. GreenScan brings ingredients, nutrition, positives, and potential concerns together so you can understand a product without digging through tabs or decoding a label alone.</p>
+          </section>
+
+          <section class="landing-steps" aria-labelledby="landingStepsTitle">
+            <div class="landing-section-heading">
+              <span>Quick start</span>
+              <h3 id="landingStepsTitle">Clarity in three simple steps</h3>
+            </div>
+            <ol>
+              <li><span>01</span><div><strong>Scan the barcode</strong><p>Point your camera at a UPC or EAN, or type it manually.</p></div></li>
+              <li><span>02</span><div><strong>Review the details</strong><p>See ingredients, nutrition, positives, and potential concerns.</p></div></li>
+              <li><span>03</span><div><strong>Choose with confidence</strong><p>Use the simple score and context to make your own decision.</p></div></li>
+            </ol>
+            <button type="button" class="landing-final-cta" id="landingFinalScanButton">Start scanning <span aria-hidden="true">&rarr;</span></button>
+          </section>
+        </div>
+      </section>
+
+      <section class="history-panel friendly-home-panel for-you-panel view-hidden" id="forYouPanel" aria-label="Your GreenScan">
+        <div class="friendly-home-heading">
+          <div>
+            <p class="eyebrow">Your GreenScan</p>
+            <h2>Choose with confidence</h2>
+          </div>
+          <span class="friendly-home-status" aria-label="GreenScan is ready">Ready</span>
+        </div>
+        <div class="friendly-dashboard-actions" aria-label="Quick actions">
+          <button type="button" class="friendly-search-action" id="historySearchButton">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+            <span>Search products</span>
+          </button>
+          <button type="button" class="friendly-scan-action" id="historyScanButton">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 8v8M11 8v8M14 8v8M17 8v8" /></svg>
+            <span>Scan</span>
+          </button>
+        </div>
+        <section class="friendly-dashboard-metrics" aria-label="Saved product summary">
+          <div>
+            <span class="friendly-metric-icon bookmark" aria-hidden="true"></span>
+            <strong id="savedProductMetric">0</strong>
+            <small>Saved products</small>
+          </div>
+          <div>
+            <span class="friendly-metric-icon shield" aria-hidden="true"></span>
+            <strong id="goodChoiceMetric">0</strong>
+            <small>Good choices</small>
+          </div>
+        </section>
+        <section class="friendly-nutrition-card" id="friendlyNutritionCard" aria-live="polite"></section>
+        <section class="friendly-swaps-card" id="friendlySwapsCard" aria-live="polite"></section>
+        <div class="section-heading friendly-recent-heading">
+          <h2>Recent scans</h2>
+          <button class="ghost-button" id="clearHistoryButton">Clear</button>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </section>
+
+      <section class="search-panel view-hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow" id="searchEyebrow">Product search</p>
+            <h2 id="searchTitle">Search products</h2>
+          </div>
+        </div>
+        <div class="search-mode-toggle" role="tablist" aria-label="Search type">
+          <button type="button" class="active" data-search-mode="products" aria-selected="true">Products</button>
+          <button type="button" data-search-mode="ingredients" aria-selected="false">Ingredients</button>
+        </div>
+        <form class="search-form" id="productSearchForm">
+          <div class="input-row">
+            <input id="productSearchInput" autocomplete="off" placeholder="Coca Cola, Lays, Dove..." />
+            <button type="submit" class="icon-button submit" aria-label="Search products" title="Search products">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
+            </button>
+          </div>
+        </form>
+        <div class="search-suggestions hidden" id="searchSuggestions"></div>
+        <div class="search-results" id="productSearchResults">
+          <p>Search food, drinks, and beauty products by name.</p>
+        </div>
+        <section class="recent-searches" id="recentSearches">
+          <div class="section-heading compact-heading">
+            <h3>Recently searched</h3>
+            <button type="button" class="ghost-button" id="clearRecentSearchesButton">Clear</button>
+          </div>
+          <div class="recent-search-list" id="recentSearchList"></div>
+        </section>
+        <section class="favorites-panel" id="favoritesPanel"></section>
+      </section>
+
+      <footer class="app-credit">
+        <span>Created by GreenScan Team 2026</span>
+        <span>Email us at greenscanteam@outlook.com</span>
+      </footer>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Primary navigation">
+      <div class="desktop-nav-header">
+        <div class="desktop-nav-brand">
+          <strong>GreenScan</strong>
+        </div>
+        <button class="desktop-nav-toggle" id="desktopNavToggle" type="button" aria-label="Hide navigation menu" title="Hide menu" aria-expanded="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14" /><path d="M5 12h14" /><path d="M5 17h14" /></svg>
+        </button>
+      </div>
+      <button type="button" class="nav-item" id="navHistoryButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7" /><path d="M5 9v11h14V9" /><path d="M9 20v-7h6v7" /></svg>
+        <span>Home</span>
+      </button>
+      <button type="button" class="nav-item" id="navForYouButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-7-11a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 6.6-7 11-7 11Z" /><path d="M9 13h6M12 10v6" /></svg>
+        <span>For you</span>
+      </button>
+      <button type="button" class="nav-item" id="navScanButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 8v8" /><path d="M11 8v8" /><path d="M14 8v8" /><path d="M17 8v8" /></svg>
+        <span>Scan</span>
+      </button>
+      <button type="button" class="nav-item" id="navSearchButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
+        <span>Search</span>
+      </button>
+      <button type="button" class="nav-item" id="navSourcesButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17h.01" /><path d="M12 13a3 3 0 1 0-3-3" /><circle cx="12" cy="12" r="10" /></svg>
+        <span>Sources</span>
+      </button>
+    </nav>
+
+    <dialog id="settingsDialog">
+      <form method="dialog" class="settings-form">
+        <div class="section-heading">
+          <h2>Settings</h2>
+          <button class="icon-button" value="close" aria-label="Close settings" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <section class="account-panel">
+          <p class="eyebrow">Account</p>
+          <h2 id="accountTitle">Not signed in</h2>
+          <p id="accountNote">Sign in to save and view scan history.</p>
+          <button type="button" class="google-button full" id="googleLoginButton">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.3 0 6.3 1.1 8.6 3.3l6.4-6.4C35.1 2.8 29.8.5 24 .5 14.6.5 6.5 5.9 2.6 13.7l7.9 6.1C12.3 13.8 17.7 9.5 24 9.5Z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-2.8-.4-4.1H24v8.4h13c-.3 2.1-1.7 5.2-4.9 7.3l7.6 5.9c4.5-4.2 6.8-10.3 6.8-17.5Z"/><path fill="#FBBC05" d="M10.5 28.2A14.7 14.7 0 0 1 10 24c0-1.4.2-2.8.5-4.2l-7.9-6.1A23.5 23.5 0 0 0 .1 24c0 3.7.9 7.2 2.5 10.3l7.9-6.1Z"/><path fill="#34A853" d="M24 47.5c5.8 0 10.7-1.9 14.3-5.2l-7.6-5.9c-2 1.4-4.8 2.4-8.7 2.4-6.3 0-11.7-4.2-13.6-10l-7.9 6.1C6.5 42.1 14.6 47.5 24 47.5Z"/></svg>
+            Sign in with Google
+          </button>
+          <button type="button" class="secondary-button full hidden" id="logoutButton">Log out</button>
+        </section>
+        <button type="button" class="secondary-button full" id="aiProviderButton">AI Provider</button>
+        <button type="button" class="secondary-button full" id="restrictionsButton">Restrictions</button>
+        <button type="button" class="secondary-button full" id="sourcesButton">Sources</button>
+        <button type="button" class="secondary-button full hidden" id="adminPanelButton">Admin Panel</button>
+      </form>
+    </dialog>
+
+    <dialog id="restrictionsDialog">
+      <form method="dialog" class="settings-form">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Personal filters</p>
+            <h2>Restrictions</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="Close restrictions" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="source-card">
+          <h3>Highlight ingredients you avoid</h3>
+          <p>These stay saved on this device and show up under Personal avoid list when a product matches.</p>
+        </div>
+        <label class="settings-note" for="avoidIngredients">
+          Allergy and personal avoid list
+          <textarea id="avoidIngredients" rows="4" placeholder="Fragrance, Red 40, sulfates, parabens, nuts..."></textarea>
+        </label>
+        <fieldset class="settings-fieldset">
+          <legend>Allergy and dietary filters</legend>
+          <label><input type="checkbox" value="nuts" class="diet-filter" /><span>Nuts</span></label>
+          <label><input type="checkbox" value="dairy" class="diet-filter" /><span>Dairy</span></label>
+          <label><input type="checkbox" value="gluten" class="diet-filter" /><span>Gluten</span></label>
+          <label><input type="checkbox" value="pork" class="diet-filter" /><span>Pork / gelatin</span></label>
+          <label><input type="checkbox" value="alcohol" class="diet-filter" /><span>Alcohol</span></label>
+          <label><input type="checkbox" value="vegan" class="diet-filter" /><span>Vegan watch</span></label>
+        </fieldset>
+        <button type="button" class="primary-button full" id="saveAvoidListButton">Save preferences</button>
+      </form>
+    </dialog>
+
+    <dialog id="adminDialog">
+      <form method="dialog" class="settings-form admin-form">
+        <div class="section-heading">
+          <h2>Admin Panel</h2>
+          <button class="icon-button" value="close" aria-label="Close admin panel" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <section class="source-card">
+          <p class="eyebrow">Users</p>
+          <h3>User activity</h3>
+          <div class="admin-list" id="adminUserList"></div>
+        </section>
+        <section class="source-card">
+          <p class="eyebrow">Reports</p>
+          <h3>Reported issues</h3>
+          <div class="admin-filter-row" id="adminReportFilters"></div>
+          <div class="admin-list" id="adminReportList"></div>
+        </section>
+        <section class="source-card">
+          <p class="eyebrow">Other</p>
+          <h3>Admin tools and app health</h3>
+          <div class="admin-stats" id="adminStats"></div>
+          <div class="admin-list compact-results admin-system-status" id="adminSystemStatus"></div>
+          <div class="admin-tool-grid">
+            <div>
+              <h4>Product search and edit</h4>
+              <p>Find saved products, open the listing, and edit it directly.</p>
+              <div class="input-row">
+                <input id="adminProductSearchInput" type="search" autocomplete="off" placeholder="Barcode, Doritos, Dove..." />
+                <button type="button" class="icon-button submit" id="adminProductSearchButton" aria-label="Search saved products" title="Search saved products">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
+                </button>
+              </div>
+              <div class="admin-list compact-results" id="adminProductResults"></div>
+            </div>
+            <div>
+              <h4>Repair weak listings</h4>
+              <p>Find products missing ingredients, photos, or real names.</p>
+              <button type="button" class="secondary-button full" id="adminRepairQueueButton">Load repair queue</button>
+              <div class="admin-list compact-results" id="adminRepairQueue"></div>
+              <h4>Manual barcode merge</h4>
+              <p>Enter the correct listing first, then the duplicate/wrong barcode to merge into it.</p>
+              <input id="mergeSourceBarcode" inputmode="numeric" autocomplete="off" placeholder="Correct barcode to keep" />
+              <input id="mergeTargetBarcode" inputmode="numeric" autocomplete="off" placeholder="Wrong barcode to merge" />
+              <button type="button" class="secondary-button full" id="mergeProductsButton">Merge products</button>
+            </div>
+            <div>
+              <h4>Add trusted admin</h4>
+              <p>Only verified Google accounts that are already admins can grant access.</p>
+              <div class="input-row">
+                <input id="grantAdminEmail" type="email" autocomplete="off" placeholder="name@example.com" />
+                <button type="button" class="icon-button submit" id="grantAdminButton" aria-label="Grant admin" title="Grant admin">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+                </button>
+              </div>
+            </div>
+            <div>
+              <h4>Unlimited AI and searches</h4>
+              <p>Removes daily AI analysis and product search limits for the email.</p>
+              <div class="input-row">
+                <input id="grantUnlimitedEmail" type="email" autocomplete="off" placeholder="name@example.com" />
+                <button type="button" class="icon-button submit" id="grantUnlimitedButton" aria-label="Grant unlimited access" title="Grant unlimited access">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+                </button>
+              </div>
+            </div>
+            <div>
+              <h4>Ban or unban user</h4>
+              <p>Blocks abusive accounts from account sync, reporting, searching, AI analysis, and shared edits.</p>
+              <div class="input-row">
+                <input id="banUserEmail" type="email" autocomplete="off" placeholder="name@example.com" />
+                <button type="button" class="icon-button submit" id="banUserButton" aria-label="Ban user" title="Ban user">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m5 5 14 14" /></svg>
+                </button>
+                <button type="button" class="icon-button submit" id="unbanUserButton" aria-label="Unban user" title="Unban user">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="admin-limit-card">
+            <div>
+              <h4>Daily limits</h4>
+              <p>Change GreenScan limits for AI scans, product searches, category checks, and product image uploads.</p>
+            </div>
+            <div class="limit-grid">
+              <label>Signed-in AI scans<input id="limitSignedInAi" type="number" min="1" max="100" inputmode="numeric" /></label>
+              <label>Guest AI scans<input id="limitGuestAi" type="number" min="0" max="25" inputmode="numeric" /></label>
+              <label>Product searches<input id="limitSearches" type="number" min="1" max="200" inputmode="numeric" /></label>
+              <label>Category checks<input id="limitCategoryChecks" type="number" min="0" max="50" inputmode="numeric" /></label>
+              <label>Image uploads<input id="limitImageUploads" type="number" min="0" max="50" inputmode="numeric" /></label>
+            </div>
+            <button type="button" class="primary-button full" id="saveLimitsButton">Save limits</button>
+          </div>
+          <div class="admin-list" id="adminList"></div>
+        </section>
+      </form>
+    </dialog>
+
+    <dialog id="notificationDialog">
+      <form method="dialog" class="settings-form">
+        <div class="section-heading">
+          <h2>Notifications</h2>
+          <button class="icon-button" value="close" aria-label="Close notifications" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="notification-list" id="notificationList"></div>
+        <button type="button" class="secondary-button full" id="clearNotificationsButton">Clear notifications</button>
+      </form>
+    </dialog>
+
+    <dialog id="reportDialog">
+      <form method="dialog" class="settings-form">
+        <div class="section-heading">
+          <h2>Report incorrect data</h2>
+          <button class="icon-button" value="close" aria-label="Close report" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Required</p>
+          <h3>What is wrong?</h3>
+          <p>Choose one issue so GreenScan only asks for the info needed to fix it.</p>
+        </div>
+        <div class="report-type-grid" id="reportTypeGrid">
+          <button type="button" class="type-choice selected" data-report-type="ingredients">Ingredients</button>
+          <button type="button" class="type-choice" data-report-type="product_name">Product name</button>
+          <button type="button" class="type-choice" data-report-type="brand">Brand</button>
+          <button type="button" class="type-choice" data-report-type="photo">Photo</button>
+        </div>
+        <label class="report-field report-brand-field hidden">
+          Correct brand name
+          <input id="reportBrandName" type="text" maxlength="80" placeholder="Brand name" />
+        </label>
+        <label class="report-field report-name-field hidden">
+          Correct product name
+          <input id="reportProductName" type="text" maxlength="120" placeholder="Product name" />
+        </label>
+        <label class="photo-drop compact report-field report-front-field hidden" for="reportFrontPhoto">
+          <input id="reportFrontPhoto" type="file" accept="image/*" capture="environment" />
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" /><path d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /></svg>
+          <span>Correct product photo</span>
+          <strong class="upload-check hidden" id="reportFrontPhotoCheck">âœ“</strong>
+        </label>
+        <label class="photo-drop compact report-field report-ingredient-photo-field" for="reportBackPhoto">
+          <input id="reportBackPhoto" type="file" accept="image/*" capture="environment" />
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" /><path d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /></svg>
+          <span>Take ingredient photo to extract text</span>
+          <strong class="upload-check hidden" id="reportBackPhotoCheck">âœ“</strong>
+        </label>
+        <label class="ingredient-text-label report-field report-ingredients-field" for="reportIngredients">
+          Correct ingredient listing
+          <textarea id="reportIngredients" rows="5" placeholder="Upload a clear ingredient photo or type the full list"></textarea>
+        </label>
+        <button type="button" class="primary-button full" id="submitReportButton">Send report</button>
+      </form>
+    </dialog>
+
+    <dialog id="categoryDialog">
+      <form method="dialog" class="settings-form">
+        <div class="section-heading">
+          <h2>Edit product</h2>
+          <button class="secondary-button compact-admin-back hidden" type="button" id="editBackToAdminButton">
+            Back to admin
+          </button>
+          <button class="icon-button" value="close" aria-label="Close product editor" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <label class="photo-drop compact edit-product-photo-drop" for="editProductImage">
+          <input id="editProductImage" type="file" accept="image/*" />
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" /><path d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /></svg>
+          <span>Drag product image here or choose from computer</span>
+          <strong class="upload-check hidden" id="editProductImageCheck">âœ“</strong>
+        </label>
+        <label>
+          Brand
+          <input id="editBrandName" type="text" maxlength="80" placeholder="Brand name" />
+        </label>
+        <label>
+          Product name
+          <input id="editProductName" type="text" maxlength="120" placeholder="Product name" />
+        </label>
+        <label>
+          Product type
+          <select id="editBroadCategory">
+            <option value="food">Food / Drink</option>
+            <option value="beauty">Beauty / Hair</option>
+          </select>
+        </label>
+        <label>
+          Category
+          <select id="editItemCategory"></select>
+        </label>
+        <label>
+          Custom category
+          <input id="editCustomCategory" type="text" maxlength="40" placeholder="Pretzels, Deodorant, Mouthwash..." />
+        </label>
+        <label class="ingredient-text-label" for="editIngredients">
+          Ingredients
+          <textarea id="editIngredients" rows="6" placeholder="Type ingredients separated by commas"></textarea>
+        </label>
+        <button type="button" class="primary-button full" id="saveCategoryButton">Save product</button>
+      </form>
+    </dialog>
+
+    <dialog id="aiProviderDialog">
+      <form method="dialog" class="settings-form">
+        <div class="section-heading">
+          <h2>AI Provider</h2>
+          <button class="icon-button" value="close" aria-label="Close AI provider" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Optional</p>
+          <h3>Use your own AI key</h3>
+          <p>GreenScan provides AI analysis by default. Signed-in users can use their own provider key for more freedom. Your key is saved on this device and sent only to GreenScan's analysis API when you analyze a product. GreenScan daily AI limits do not apply when you use your own key.</p>
+        </div>
+        <label>
+          Provider
+          <select id="aiProviderSelect">
+            <option value="openai">ChatGPT</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="google">Google</option>
+          </select>
+        </label>
+        <label>
+          API key
+          <input id="userAiKey" type="password" autocomplete="off" placeholder="Paste your API key" />
+        </label>
+        <button type="button" class="primary-button full" id="saveAiProviderButton">Save AI provider</button>
+        <button type="button" class="secondary-button full" id="clearAiProviderButton">Use GreenScan AI</button>
+      </form>
+    </dialog>
+
+    <dialog id="sourcesDialog">
+      <form method="dialog" class="sources-form">
+        <div class="section-heading">
+          <h2>Sources</h2>
+          <button class="icon-button" value="close" aria-label="Close sources" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Open databases</p>
+          <h3>Open Food Facts and Open Beauty Facts</h3>
+          <p>GreenScan checks these open product databases first when a barcode is scanned. Their product data is available under open data licenses, including the Open Database License.</p>
+          <div class="source-links">
+            <a href="https://world.openfoodfacts.org" target="_blank" rel="noreferrer">Open Food Facts</a>
+            <a href="https://world.openbeautyfacts.org" target="_blank" rel="noreferrer">Open Beauty Facts</a>
+            <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noreferrer">ODbL License</a>
+          </div>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Food reference</p>
+          <h3>USDA FoodData Central</h3>
+          <p>GreenScan can use USDA FoodData Central as a public nutrition reference for food and drink scoring logic, especially nutrient context such as sugar, sodium, fat, and serving data when available.</p>
+          <div class="source-links">
+            <a href="https://fdc.nal.usda.gov/" target="_blank" rel="noreferrer">FoodData Central</a>
+            <a href="https://fdc.nal.usda.gov/api-guide" target="_blank" rel="noreferrer">USDA API guide</a>
+          </div>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Cosmetic reference</p>
+          <h3>EU CosIng and Cosmetic Ingredient Review</h3>
+          <p>GreenScan uses public cosmetic ingredient references to improve ingredient names, functions, and restriction notes. These sources help us flag potential cosmetic concerns, but they do not replace a professional safety assessment.</p>
+          <div class="source-links">
+            <a href="https://single-market-economy.ec.europa.eu/sectors/cosmetics/cosmetic-ingredient-database_en" target="_blank" rel="noreferrer">EU CosIng</a>
+            <a href="https://www.cir-safety.org/" target="_blank" rel="noreferrer">Cosmetic Ingredient Review</a>
+          </div>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Chemical reference</p>
+          <h3>NIH PubChem</h3>
+          <p>GreenScan can use PubChem as a public chemistry reference for ingredient name matching, CAS-style lookup, and hazard context. PubChem is used carefully as a reference source, not as a live request for every scan.</p>
+          <div class="source-links">
+            <a href="https://pubchem.ncbi.nlm.nih.gov/" target="_blank" rel="noreferrer">PubChem</a>
+            <a href="https://pubchem.ncbi.nlm.nih.gov/docs/programmatic-access" target="_blank" rel="noreferrer">Programmatic access</a>
+          </div>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">External education</p>
+          <h3>EWG Skin Deep</h3>
+          <p>GreenScan may link to EWG Skin Deep as an outside educational resource, but GreenScan does not scrape EWG, copy EWG product scores, or use EWG scores as our scoring system without permission.</p>
+          <div class="source-links">
+            <a href="https://www.ewg.org/skindeep/" target="_blank" rel="noreferrer">EWG Skin Deep</a>
+            <a href="https://www.ewg.org/legal-disclaimer" target="_blank" rel="noreferrer">EWG legal information</a>
+          </div>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Scanner technology</p>
+          <h3>Browser scanner with open-source fallback</h3>
+          <p>GreenScan first tries the browser's built-in barcode reader when supported. If that is unavailable or unstable, it falls back to open-source JavaScript barcode scanning so iPhone, iPad, Android, and desktop browsers have a better chance of reading UPC and EAN codes.</p>
+          <div class="source-links">
+            <a href="https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API" target="_blank" rel="noreferrer">Barcode Detection API</a>
+            <a href="https://github.com/zxing-js/browser" target="_blank" rel="noreferrer">ZXing JS</a>
+            <a href="https://github.com/ericblade/quagga2" target="_blank" rel="noreferrer">Quagga2</a>
+          </div>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Enrichment policy</p>
+          <h3>Caching before live lookups</h3>
+          <p>When GreenScan adds reference enrichment, it should cache ingredient and product results in our saved database first. This helps avoid repeated API calls, protects rate limits, and keeps scans fast.</p>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">AI fallback</p>
+          <h3>When no product match is found</h3>
+          <p>If a barcode is not found in the open databases, GreenScan asks for product photos and uses AI to read the ingredient label, rate the product, and save that barcode result in our database so future scans can load it without using AI again.</p>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Your AI key</p>
+          <h3>Optional personal provider</h3>
+          <p>Signed-in users can add their own ChatGPT, Anthropic, or Google AI API key in Settings. This is optional; GreenScan provides AI by default, but using your own key gives you more control over your own analysis usage. GreenScan daily AI limits do not apply when your own key is used.</p>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">User data</p>
+          <h3>History sync</h3>
+          <p>If you sign in with Google, GreenScan saves your recent scan history and recent searches on our servers so your account can restore them across devices. Guests keep history on their phone or browser only. Product photos are not saved in account history as large inline images.</p>
+          <p>GreenScan may also save shared barcode ingredient results so the same product can load later without using AI again.</p>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Privacy</p>
+          <h3>What GreenScan stores</h3>
+          <p>Google sign-in is used to identify your account email and restore account features. GreenScan does not sell personal scan history. Signed-in history is limited to recent product scan data, and you can clear it from History. AI ingredient photos are processed to create product data; large personal photo data is not stored in account history.</p>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Safety vocabulary</p>
+          <h3>Flagged ingredient list</h3>
+          <p>GreenScan's local vocabulary includes ingredients and additive categories flagged by public regulatory sources, including FDA food and cosmetic restrictions and EU food/cosmetic safety actions. When an ingredient is banned, limited, restricted, no longer authorized, or warned about in those sources, GreenScan shows that note in the ingredient details. The vocabulary is used as a screening guide, not medical advice.</p>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Important note</p>
+          <h3>Educational screening only</h3>
+          <p>GreenScan is an educational ingredient screening tool. Scores and ingredient notes are not medical advice, diagnosis, allergy advice, or a guarantee that a product is safe or unsafe for every person. If you have allergies, sensitivities, medical conditions, pregnancy concerns, or questions about a product, check the package label and ask a qualified professional.</p>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Scoring method</p>
+          <h3>How GreenScan scores products</h3>
+          <p>Every product starts at 100. GreenScan subtracts points for potential concerns found in the ingredient list: potential high risk -18, potential moderate risk -8, and unknown concern -3. If no ingredient list is available, the score is lowered because the result has less evidence.</p>
+          <p>Food and drink products can lose extra points for added sugar, flagged additives, added fats or oils, artificial colors, high fructose corn syrup, BHA/BHT, sodium nitrite, high sugar, high fat, high saturated fat, high sodium, or a poor Nutri-Score. Beauty and hair products can lose extra points for fragrance, strong sensitizers, formaldehyde releasers, drying alcohols, or sulfates.</p>
+          <p>Products can gain small bonuses for no high-concern ingredients, shorter ingredient lists, whole-food signals, no added sugar, no flagged additives, no added fats or oils, or beauty formulas without fragrance and common sensitizers. Score ranges: 90-100 Excellent, 75-89 Good, 50-74 Fair, 25-49 Poor, and 0-24 Bad.</p>
+        </div>
+        <button type="submit" class="secondary-button full dialog-close-action" value="close">Back to GreenScan</button>
+      </form>
+    </dialog>
+
+    <dialog id="ingredientDialog" class="ingredient-dialog">
+      <form method="dialog" class="ingredient-detail">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow" id="ingredientRiskLabel">Ingredient risk</p>
+            <h2 id="ingredientDetailTitle">Ingredient</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="Close ingredient details" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="ingredient-detail-actions">
+          <small id="ingredientDetailAlias" class="ingredient-alias hidden"></small>
+          <button type="button" class="secondary-button compact-action" id="ingredientSpeakButton">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" /></svg>
+            Hear ingredient name
+          </button>
+        </div>
+        <p id="ingredientDetailReason"></p>
+        <section class="associated-risk-section hidden" id="ingredientRiskSection">
+          <h3>Potential risks</h3>
+          <div class="associated-risk-grid" id="ingredientRiskList"></div>
+        </section>
+        <div class="detail-grid">
+          <span id="ingredientDetailType"></span>
+          <span id="ingredientDetailScore"></span>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="ingredientTemplate">
+      <article class="ingredient-row">
+        <span class="ingredient-status-icon" aria-hidden="true"></span>
+        <div>
+          <strong></strong>
+          <p></p>
+        </div>
+        <span class="risk"></span>
+        <span class="ingredient-chevron" aria-hidden="true">â€º</span>
+      </article>
+    </template>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="./zxing-browser.min.js"></script>
+    <script src="./quagga.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
+
+
