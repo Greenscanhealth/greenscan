@@ -315,12 +315,14 @@
                   Scan now
                   <span aria-hidden="true">&rarr;</span>
                 </button>
+                <a class="landing-text-button landing-github-link" href="https://github.com/Greenscanhealth/greenscan" target="_blank" rel="noreferrer">See us on GitHub</a>
                 <button type="button" class="landing-text-button" id="landingSearchButton">Search a product</button>
               </div>
               <div class="landing-trust-row" aria-label="GreenScan benefits">
                 <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg> No download</span>
                 <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg> Free to use</span>
                 <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg> Privacy-conscious</span>
+                <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg> Offline queue</span>
               </div>
             </div>
             <div class="landing-preview" aria-label="Example GreenScan product overview">
@@ -915,9 +917,22 @@
           <p>If a barcode is not found in the open databases, GreenScan asks for product photos and uses AI to read the ingredient label, rate the product, and save that barcode result in our database so future scans can load it without using AI again.</p>
         </div>
         <div class="source-card">
+          <p class="eyebrow">Offline behavior</p>
+          <h3>Known products work offline, new labels queue</h3>
+          <p>When you do not have internet, GreenScan can still open the app shell and load products already saved on your device. New ingredient photos, front-label photos, pasted ingredients, and nutrition labels can be saved into a small on-device queue. When you reopen GreenScan with internet, queued items are analyzed once, deduplicated by barcode and label fingerprint, and then added to the shared database when possible.</p>
+        </div>
+        <div class="source-card">
           <p class="eyebrow">Your AI key</p>
           <h3>Optional personal provider</h3>
           <p>Signed-in users can add their own ChatGPT, Anthropic, or Google AI API key in Settings. This is optional; GreenScan provides AI by default, but using your own key gives you more control over your own analysis usage. GreenScan daily AI limits do not apply when your own key is used.</p>
+        </div>
+        <div class="source-card">
+          <p class="eyebrow">Open source</p>
+          <h3>GitHub users bring their own API keys</h3>
+          <p>The GreenScan source code is available on GitHub for review and self-hosting. If you clone or deploy your own copy, you must configure your own Cloudflare account, OpenAI or other AI provider key, helper services, and usage limits. GreenScan's production API keys, credits, and free trial usage are not included or shared with GitHub copies.</p>
+          <div class="source-links">
+            <a href="https://github.com/Greenscanhealth/greenscan" target="_blank" rel="noreferrer">GreenScan on GitHub</a>
+          </div>
         </div>
         <div class="source-card">
           <p class="eyebrow">User data</p>

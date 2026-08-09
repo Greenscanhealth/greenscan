@@ -228,6 +228,7 @@ const els = {
 const googleClientId = "1032217844027-rm6bbkqo8p1dmtt87i4b80s38sesdjnm.apps.googleusercontent.com";
 const accountSessionStorageKey = "greenscan.accountSession.v1";
 const googleNonceStorageKey = "greenscan.googleNonce.v1";
+const pendingAnalysisStorageKey = "greenscan.pendingAnalysis.v1";
 
 const localCachePolicy = {
   historyLimit: 10,
@@ -235,6 +236,7 @@ const localCachePolicy = {
   favoriteLimit: 18,
   recentSearchLimit: 8,
   notificationLimit: 15,
+  pendingAnalysisLimit: 6,
   keepProductImages: 6,
   keepHistoryImages: 3,
   maxInlineImageLength: 90000,
@@ -874,6 +876,8 @@ initHomeScreenPanel();
 initOnboarding();
 loadPublicHomePanels();
 cleanupLocalCache();
+syncPendingAnalyses();
+window.addEventListener("online", () => syncPendingAnalyses());
 registerServiceWorker();
 switchView(state.user ? "forYou" : "home");
 loadSharedProductFromUrl();
@@ -4757,17 +4761,18 @@ function renderNotFound(barcode) {
   clearResultSheet();
   els.resultPanel.classList.remove("loading-result");
   setFallbackHeading("Product not found", "Add full label photo");
+  const offline = !navigator.onLine;
   els.resultPanel.innerHTML = `
     <div class="empty-state">
-      <p class="eyebrow">No database match</p>
-      <h2>Barcode ${escapeHtml(barcode)} was not found.</h2>
-      <p>Choose whether this is food / drink or beauty before adding product photos.</p>
+      <p class="eyebrow">${offline ? "Offline mode" : "No database match"}</p>
+      <h2>${offline ? "Only saved GreenScan products are available offline." : `Barcode ${escapeHtml(barcode)} was not found.`}</h2>
+      <p>${offline ? "If this product is not already saved on this device, add label photos or pasted ingredients and GreenScan will queue it for analysis when internet returns." : "Choose whether this is food / drink or beauty before adding product photos."}</p>
     </div>
   `;
   els.fallbackPanel.classList.remove("hidden");
   resetProductTypeChoice();
   scrollToProductTypePanel();
-  toast("No open database match. Choose product type.");
+  toast(offline ? "Offline. Known saved products still work." : "No open database match. Choose product type.");
 }
 
 function needsIngredientFill(analysis) {
@@ -4958,6 +4963,12 @@ async function analyzeCurrentPhoto() {
   setLoading(state.selectedProductType === "food" ? "Analyzing full back label" : "Analyzing ingredient label");
 
   try {
+    if (!navigator.onLine) {
+      const queued = await queueCurrentPhotoAnalysis("offline");
+      renderQueuedAnalysis(queued);
+      toast("Saved offline. GreenScan will analyze and add it when internet returns.");
+      return;
+    }
     const analysisResult = getAnalysisEndpoint()
       ? await analyzeWithEdgeFunction()
       : await analyzeUploadedIngredients();
@@ -4970,6 +4981,12 @@ async function analyzeCurrentPhoto() {
     els.fallbackPanel.classList.add("hidden");
     if (analysis.savedToDatabase) toast("✓ Saved to database");
   } catch (error) {
+    if (isNetworkError(error)) {
+      const queued = await queueCurrentPhotoAnalysis("network_error");
+      renderQueuedAnalysis(queued);
+      toast("Saved for later. GreenScan will retry when internet returns.");
+      return;
+    }
     renderAnalysisError(error);
   } finally {
     state.analyzing = false;
@@ -5040,6 +5057,150 @@ async function analyzeWithEdgeFunction() {
   analysis.imageUrl = frontImage || "";
   analysis.savedToDatabase = Boolean(data.saved_to_database || data.savedToDatabase);
   return analysis;
+}
+
+async function buildCurrentAnalysisPayload() {
+  const frontImage = state.currentFrontPhoto ? await fileToCompressedDataUrl(state.currentFrontPhoto) : null;
+  const backImage = state.currentPhoto ? await fileToCompressedDataUrl(state.currentPhoto) : null;
+  return {
+    barcode: state.currentBarcode,
+    productType: state.selectedProductType,
+    userEmail: state.user?.email || "",
+    userId: state.user?.id || "",
+    userAiProvider: state.user ? state.userAiSettings.provider : "",
+    userAiKey: state.user ? state.userAiSettings.apiKey : "",
+    hasNutritionFacts: state.selectedProductType === "food" ? state.labelHasNutritionFacts : "not_applicable",
+    frontImage,
+    backImage,
+    manualIngredients: els.manualIngredients.value.trim(),
+  };
+}
+
+async function queueCurrentPhotoAnalysis(reason = "offline") {
+  const payload = await buildCurrentAnalysisPayload();
+  return queuePendingAnalysis(payload, reason);
+}
+
+function getPendingAnalyses() {
+  try {
+    return JSON.parse(localStorage.getItem(pendingAnalysisStorageKey) || "[]").filter((item) => item?.id && item.payload);
+  } catch {
+    return [];
+  }
+}
+
+function savePendingAnalyses(items) {
+  const limited = items.slice(0, localCachePolicy.pendingAnalysisLimit);
+  try {
+    localStorage.setItem(pendingAnalysisStorageKey, JSON.stringify(limited));
+  } catch {
+    try {
+      localStorage.setItem(pendingAnalysisStorageKey, JSON.stringify(limited.slice(0, 2)));
+    } catch {
+      localStorage.removeItem(pendingAnalysisStorageKey);
+    }
+  }
+}
+
+function pendingAnalysisId(payload) {
+  const barcode = normalizeBarcode(payload.barcode || "") || "photo-only";
+  const text = String(payload.manualIngredients || "").toLowerCase().replace(/\s+/g, " ").slice(0, 220);
+  const imageMarker = [payload.frontImage, payload.backImage]
+    .map((value) => `${String(value || "").length}:${String(value || "").slice(-36)}`)
+    .join("|");
+  return [barcode, payload.productType || "unknown", payload.hasNutritionFacts || "", text, imageMarker].join("::");
+}
+
+function queuePendingAnalysis(payload, reason = "offline") {
+  const id = pendingAnalysisId(payload);
+  const existing = getPendingAnalyses().filter((item) => item.id !== id);
+  const safePayload = {
+    ...payload,
+    userAiKey: "",
+  };
+  const item = {
+    id,
+    reason,
+    payload: safePayload,
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+  };
+  savePendingAnalyses([item, ...existing]);
+  return item;
+}
+
+function renderQueuedAnalysis(item) {
+  clearResultSheet();
+  const barcode = item?.payload?.barcode || state.currentBarcode || "";
+  els.resultPanel.innerHTML = `
+    <div class="empty-state">
+      <p class="eyebrow">Saved offline</p>
+      <h2>Queued for GreenScan analysis</h2>
+      <p>${barcode ? `Barcode ${escapeHtml(barcode)} is saved on this device.` : "This label is saved on this device."} Open GreenScan with internet and it will analyze the label, avoid duplicates, and add the result to the shared database when possible.</p>
+    </div>
+  `;
+  els.resultPanel.classList.remove("view-hidden");
+  scrollToResultPanel();
+}
+
+function isNetworkError(error) {
+  if (!navigator.onLine) return true;
+  const message = String(error?.message || error || "").toLowerCase();
+  return /failed to fetch|network|load failed|internet|offline/.test(message);
+}
+
+let pendingAnalysisSyncing = false;
+
+async function syncPendingAnalyses() {
+  if (pendingAnalysisSyncing || !navigator.onLine || !getAnalysisEndpoint()) return;
+  const pending = getPendingAnalyses();
+  if (!pending.length) return;
+  pendingAnalysisSyncing = true;
+  const remaining = [];
+  let synced = 0;
+  try {
+    for (const item of pending) {
+      try {
+        const headers = {};
+        headers["Content-Type"] = "application/json";
+        await ensureFreshIdToken();
+        addAuthHeader(headers);
+        const payload = {
+          ...item.payload,
+          userEmail: state.user?.email || item.payload.userEmail || "",
+          userId: state.user?.id || item.payload.userId || "",
+          userAiProvider: state.user ? state.userAiSettings.provider : item.payload.userAiProvider || "",
+          userAiKey: state.user ? state.userAiSettings.apiKey : "",
+        };
+        const response = await fetch(getAnalysisEndpoint(), {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Queued analysis failed.");
+        const analysis = normalizeAiResponse(data);
+        analysis.imageUrl = payload.frontImage || "";
+        analysis.savedToDatabase = Boolean(data.saved_to_database || data.savedToDatabase);
+        saveProductAnalysis(analysis);
+        saveHistory(analysis);
+        synced += 1;
+      } catch (error) {
+        remaining.push({
+          ...item,
+          attempts: Number(item.attempts || 0) + 1,
+          lastError: String(error?.message || error || "Sync failed").slice(0, 140),
+        });
+      }
+    }
+    savePendingAnalyses(remaining);
+    if (synced) {
+      renderHistory();
+      toast(synced === 1 ? "Offline item added to database." : `${synced} offline items added to database.`);
+    }
+  } finally {
+    pendingAnalysisSyncing = false;
+  }
 }
 
 function renderAnalysisError(error) {
