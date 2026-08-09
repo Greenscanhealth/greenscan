@@ -2373,6 +2373,7 @@ async function getUserIndex(env) {
   const fromKeys = keys.map((key) => key.name.replace(/^user:/, "")).filter(Boolean);
   const historyKeys = await listAllKeys(env, "account-history:");
   const searchKeys = await listAllKeys(env, "account-searches:");
+  const sessionIdentities = await getSessionUserIdentities(env);
   const usageKeys = [
     ...await listAllKeys(env, "search-usage:"),
     ...await listAllKeys(env, "ai-usage:"),
@@ -2388,7 +2389,7 @@ async function getUserIndex(env) {
   ].filter(Boolean);
   const seen = new Set();
   const merged = [];
-  [...(Array.isArray(indexed) ? indexed : []), ...queued, ...fromKeys, ...fromAccountKeys].forEach((identity) => {
+  [...(Array.isArray(indexed) ? indexed : []), ...queued, ...fromKeys, ...fromAccountKeys, ...sessionIdentities].forEach((identity) => {
     const value = String(identity || "");
     if (!value || seen.has(value)) return;
     seen.add(value);
@@ -2397,6 +2398,38 @@ async function getUserIndex(env) {
   if (merged.length && (!Array.isArray(indexed) || merged.length !== indexed.length)) await env.PRODUCT_CACHE.put("users:index", JSON.stringify(merged));
   if (merged.length && merged.length !== queued.length) await env.PRODUCT_CACHE.put("queue:user-index", JSON.stringify(merged.slice(0, 500)));
   return merged;
+}
+
+async function getSessionUserIdentities(env) {
+  const sessionKeys = await listAllKeys(env, "auth-session:");
+  const identities = [];
+  for (const key of sessionKeys.slice(0, 500)) {
+    try {
+      const session = await env.PRODUCT_CACHE.get(key.name, "json");
+      const email = normalizeEmail(session?.email);
+      if (!email) continue;
+      const identity = `email:${email}`;
+      identities.push(identity);
+      const userKey = `user:${identity}`;
+      const existing = await env.PRODUCT_CACHE.get(userKey, "json");
+      if (!existing) {
+        await env.PRODUCT_CACHE.put(userKey, JSON.stringify({
+          identity,
+          email,
+          name: session.name || email,
+          picture: session.picture || "",
+          stats: defaultUserStats(),
+          statsDate: todayKey(),
+          firstSeenAt: session.createdAt || new Date().toISOString(),
+          lastSeenAt: new Date().toISOString(),
+          recoveredFromSession: true,
+        }));
+      }
+    } catch {
+      // Ignore malformed or expired session records; regular auth cleanup handles them.
+    }
+  }
+  return identities;
 }
 
 async function getPendingIds(env, queueName, prefix) {

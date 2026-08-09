@@ -227,6 +227,7 @@ const els = {
 
 const googleClientId = "1032217844027-rm6bbkqo8p1dmtt87i4b80s38sesdjnm.apps.googleusercontent.com";
 const accountSessionStorageKey = "greenscan.accountSession.v1";
+const accountRegistrationStorageKey = "greenscan.accountRegistered.v1";
 const googleNonceStorageKey = "greenscan.googleNonce.v1";
 const pendingAnalysisStorageKey = "greenscan.pendingAnalysis.v1";
 
@@ -5808,7 +5809,9 @@ async function syncAccountData() {
 }
 
 async function registerAccountSession() {
-  if (getStoredAccountSession()?.token || !hasUsableIdToken()) return;
+  if (!hasUsableIdToken()) return;
+  const session = getStoredAccountSession();
+  if (session?.token && wasAccountRegisteredToday()) return;
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/account/register`, {
       method: "POST",
@@ -5820,12 +5823,33 @@ async function registerAccountSession() {
     });
     if (!response.ok) return;
     const data = await response.json();
+    markAccountRegisteredToday();
     if (data.sessionToken) {
       saveAccountSession(data.sessionToken, data.sessionExpiresAt);
       requestPersistentAppStorage();
     }
   } catch {
     // Account registration is best effort; the current Google token still works.
+  }
+}
+
+function wasAccountRegisteredToday() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(accountRegistrationStorageKey) || "null");
+    return saved?.email === state.user?.email && saved?.date === new Date().toISOString().slice(0, 10);
+  } catch {
+    return false;
+  }
+}
+
+function markAccountRegisteredToday() {
+  try {
+    localStorage.setItem(accountRegistrationStorageKey, JSON.stringify({
+      email: state.user?.email || "",
+      date: new Date().toISOString().slice(0, 10),
+    }));
+  } catch {
+    // Registration still succeeded; the next launch may refresh the index again.
   }
 }
 async function syncAccountHistory() {
