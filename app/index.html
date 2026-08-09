@@ -529,6 +529,7 @@
         <button type="button" class="secondary-button full" id="aiProviderButton">AI Provider</button>
         <button type="button" class="secondary-button full" id="restrictionsButton">Restrictions</button>
         <button type="button" class="secondary-button full" id="sourcesButton">Sources</button>
+        <button type="button" class="secondary-button full" id="changelogButton">Changelog</button>
         <button type="button" class="secondary-button full hidden" id="adminPanelButton">Admin Panel</button>
       </form>
     </dialog>
@@ -800,6 +801,42 @@
         </label>
         <button type="button" class="primary-button full" id="saveAiProviderButton">Save AI provider</button>
         <button type="button" class="secondary-button full" id="clearAiProviderButton">Use GreenScan AI</button>
+      </form>
+    </dialog>
+
+    <dialog id="changelogDialog">
+      <form method="dialog" class="settings-form changelog-form">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">App updates</p>
+            <h2>Changelog</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="Close changelog" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <div class="changelog-list">
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">August 2026</p>
+            <h3>New Home and For You experience</h3>
+            <ul>
+              <li>Added the new GreenScan landing page with a clear Scan now flow.</li>
+              <li>Moved personal metrics, recommendations, and recent scans into For you.</li>
+              <li>Updated the GreenScan GS logo and home-screen icons.</li>
+              <li>Fixed mobile scanner controls, manual barcode entry, and recent scan text overflow.</li>
+            </ul>
+          </article>
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">Production launch</p>
+            <h3>GreenScan goes live</h3>
+            <ul>
+              <li>Launched barcode scanning, product search, ingredient review, and safety scoring.</li>
+              <li>Added Google sign-in, synced history, favorites, restrictions, and admin tools.</li>
+              <li>Added AI fallback for missing products and saved shared results to reduce repeat analysis.</li>
+            </ul>
+          </article>
+        </div>
+        <button type="submit" class="secondary-button full dialog-close-action" value="close">Back to Settings</button>
       </form>
     </dialog>
 

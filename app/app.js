@@ -145,6 +145,8 @@ const els = {
   clearAiProviderButton: document.querySelector("#clearAiProviderButton"),
   sourcesButton: document.querySelector("#sourcesButton"),
   sourcesDialog: document.querySelector("#sourcesDialog"),
+  changelogButton: document.querySelector("#changelogButton"),
+  changelogDialog: document.querySelector("#changelogDialog"),
   adminPanelButton: document.querySelector("#adminPanelButton"),
   adminDialog: document.querySelector("#adminDialog"),
   adminStats: document.querySelector("#adminStats"),
@@ -809,6 +811,7 @@ els.saveAiProviderButton.addEventListener("click", saveAiProvider);
 els.clearAiProviderButton.addEventListener("click", clearAiProvider);
 els.logoutButton.addEventListener("click", logout);
 els.sourcesButton.addEventListener("click", openSources);
+els.changelogButton.addEventListener("click", openChangelog);
 els.adminPanelButton.addEventListener("click", openAdminPanel);
 els.grantAdminButton.addEventListener("click", grantAdminAccess);
 els.grantUnlimitedButton.addEventListener("click", grantUnlimitedAccess);
@@ -6175,6 +6178,10 @@ function openRestrictions() {
 
 function openSources() {
   els.sourcesDialog.showModal();
+}
+
+function openChangelog() {
+  els.changelogDialog.showModal();
 }
 
 function openAiProvider() {
