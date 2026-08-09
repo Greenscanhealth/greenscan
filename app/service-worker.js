@@ -1,4 +1,4 @@
-const CACHE_NAME = "greenscan-shell-v35";
+const CACHE_NAME = "greenscan-shell-v36";
 const APP_SHELL = [
   "./",
   "./index.html",
