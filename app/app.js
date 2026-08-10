@@ -2320,22 +2320,24 @@ function splitIngredients(text) {
     .slice(0, 36);
 }
 
-const NON_INGREDIENT_SECTION_STOP = "\\b(?:purpose|uses?|warnings?|directions?|questions?|other information|when using|do not use|distributed by|dist\\. by|manufactured by|mfd\\. by|website|www\\.|catch us|follow us|connect with|certified|recyclable|not tested on animals|for external use|keep out of reach|stop use|ask a doctor|if swallowed|poison control|@)\\b";
+const NON_INGREDIENT_SECTION_STOP = "\\b(?:(?:drug|nutrition|supplement) facts|purpose|uses?|warnings?|directions?|questions?|other information|serving size|calories|%\\s*daily value|(?:contains|may contain)\\s*:?\\s*(?:milk|eggs?|fish|shellfish|tree nuts?|peanuts?|wheat|soybeans?|sesame)\\b|allergen(?:s)?|produced in|made in (?:a )?facility|distributed by|dist\\. by|manufactured by|mfd\\. by|marketed by|packaged by|copyright|trademark|phone|call|contact us|questions or comments|website|www\\.|https?://|\\.com\\b|catch us|follow us|connect with|facebook|instagram|twitter|x\\.com|tiktok|@|scan|barcode|upc|qr code|recycling|recyclable|recycle|dispose|storage|store in|keep in|best before|best by|sell by|use by|expiration|exp\\.?|lot|batch|net wt|net weight|contents|package|packaging|for external use|keep out of reach|when using|do not use|stop use|ask a doctor|if swallowed|get medical help|poison control|active ingredient[s]?\\s*$|inactive ingredient[s]?\\s*$|vegan|cruelty[- ]?free|paraben[- ]?free|aluminum[- ]?free|dermatologist tested|clinically proven|certified|certification|not tested on animals|no artificial|gluten[- ]?free|non[- ]?gmo|plant[- ]?based)\\b";
+const DRUG_FACTS_ACTIVE_STOP = "\\b(?:purpose|uses?|warnings?|directions?|inactive ingredients?|questions?|other information|when using|do not use|for external use|keep out of reach|stop use|ask a doctor|if swallowed|get medical help|poison control)\\b";
+const DRUG_FACTS_INACTIVE_STOP = "\\b(?:purpose|uses?|warnings?|directions?|questions?|other information|distributed by|dist\\. by|manufactured by|mfd\\. by|marketed by|packaged by|phone|call|contact us|questions or comments|website|www\\.|https?://|\\.com\\b|catch us|follow us|connect with|facebook|instagram|twitter|x\\.com|tiktok|@|for external use|keep out of reach|when using|do not use|stop use|ask a doctor|if swallowed|get medical help|poison control|barcode|upc|qr code|recycling|recyclable|storage|store in|best before|best by|lot|batch|net wt|net weight|vegan|cruelty[- ]?free|paraben[- ]?free|aluminum[- ]?free|dermatologist tested|clinically proven|certified|certification|not tested on animals)\\b";
 
 function cleanIngredientSection(value) {
   let text = String(value || "").replace(/\r/g, "\n").replace(/[ \t]+/g, " ").trim();
   if (!text) return "";
   const compact = text.replace(/\n+/g, " ").replace(/\s{2,}/g, " ").trim();
   const sections = [];
-  const activeMatch = compact.match(/\bactive ingredients?\b\s*:?\s*([\s\S]*?)(?=\b(?:purpose|uses?|warnings?|directions?|inactive ingredients?|questions?|other information|when using|do not use|for external use|keep out of reach)\b|$)/i);
+  const activeMatch = compact.match(new RegExp("\\bactive ingredients?\\b\\s*:?\\s*([\\s\\S]*?)(?=" + DRUG_FACTS_ACTIVE_STOP + "|$)", "i"));
   if (activeMatch?.[1]) {
     const cleaned = stripNonIngredientTail(activeMatch[1]);
-    if (cleaned) sections.push(`Active ingredient: ${cleaned}`);
+    if (cleaned) sections.push("Active ingredient: " + cleaned);
   }
-  const inactiveMatch = compact.match(/\binactive ingredients?\b\s*:?\s*([\s\S]*?)(?=\b(?:questions?|directions?|warnings?|distributed by|dist\\. by|manufactured by|mfd\\. by|website|www\\.|catch us|follow us|connect with|certified|@|other information|for external use|keep out of reach|when using|do not use)\b|$)/i);
+  const inactiveMatch = compact.match(new RegExp("\\binactive ingredients?\\b\\s*:?\\s*([\\s\\S]*?)(?=" + DRUG_FACTS_INACTIVE_STOP + "|$)", "i"));
   if (inactiveMatch?.[1]) {
     const cleaned = stripNonIngredientTail(inactiveMatch[1]);
-    if (cleaned) sections.push(`Inactive ingredients: ${cleaned}`);
+    if (cleaned) sections.push("Inactive ingredients: " + cleaned);
   }
   if (sections.length) return sections.join("; ");
   const ingredientMatch = compact.match(new RegExp("\\bingredients?\\b\\s*:?\\s*([\\s\\S]*?)(?=" + NON_INGREDIENT_SECTION_STOP + "|$)", "i"));
@@ -2349,11 +2351,9 @@ function cleanIngredientSection(value) {
 
 function stripNonIngredientTail(value) {
   return String(value || "")
-    .replace(/\b(?:purpose|uses?|warnings?|directions?|questions?|other information|when using|do not use)\b[\s\S]*$/i, "")
-    .replace(/\b(?:distributed by|dist\. by|manufactured by|mfd\. by|call|www\.|catch us|follow us|connect with|@)\b[\s\S]*$/i, "")
+    .replace(new RegExp(NON_INGREDIENT_SECTION_STOP + "[\\s\\S]*$", "i"), "")
     .replace(/\b(?:for external use only|keep out of reach of children|stop use|ask a doctor|if swallowed|get medical help|poison control)\b[\s\S]*$/i, "")
-    .replace(/\b(?:apply to|use daily|reduces underarm wetness|antiperspirant)\b[\s\S]*$/i, "")
-    .replace(/\b(?:certified|certification|recyclable|sustainably|not tested on animals)\b[\s\S]*$/i, "")
+    .replace(/\b(?:apply to|use daily|shake well|suggested use|dosage|reduces underarm wetness|antiperspirant)\b[\s\S]*$/i, "")
     .replace(/\b1[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, " ")
     .replace(/\b\d{6,14}\b/g, " ")
     .replace(/\s*[,;]\s*/g, ", ")

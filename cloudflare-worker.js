@@ -9,7 +9,7 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 const MAX_REQUEST_BYTES = 7 * 1024 * 1024;
 const MAX_IMAGE_URL_LENGTH = 3_200_000;
-const ACCOUNT_SYNC_LIMIT = 120;
+const ACCOUNT_SYNC_LIMIT = 40;
 const ACCOUNT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 90;
 const ACCOUNT_SESSION_RENEW_SECONDS = 60 * 60 * 24 * 14;
 const DEFAULT_LIMITS = {
@@ -19,6 +19,13 @@ const DEFAULT_LIMITS = {
   categoryVerifications: 8,
   imageUploads: 8,
 };
+const FREE_TIER_BUDGETS = {
+  publicWrites: 80,
+  accountSyncs: 120,
+  searches: 120,
+  aiUsageWrites: 90,
+};
+const FREE_TIER_LIMIT_MESSAGE = "GreenScan is protecting today's free Cloudflare usage. Try again tomorrow.";
 
 export default {
   async fetch(request, env) {
@@ -606,6 +613,8 @@ export default {
           headers,
         );
       }
+      const cloudBudget = await enforceFreeTierBudget(env, "searches", FREE_TIER_BUDGETS.searches);
+      if (!cloudBudget.ok) return json({ error: cloudBudget.error }, 429, headers);
       if (!usage.unlimited) {
         await setDailyUsage(env, usage.key, usage.count + 1);
       }
@@ -974,6 +983,10 @@ export default {
           headers,
         );
       }
+      if (!usingUserAi) {
+        const cloudBudget = await enforceFreeTierBudget(env, "ai-usage-writes", FREE_TIER_BUDGETS.aiUsageWrites);
+        if (!cloudBudget.ok) return json({ error: cloudBudget.error }, 429, headers);
+      }
 
       const helper = {
         frontCompressed: false,
@@ -1018,7 +1031,7 @@ export default {
         {
           role: "system",
           content:
-            "You analyze food and beauty products from images. Return only JSON. Use the front image for brand/product title. Use the back image or typed text for ingredient data. Critical extraction rule: extracted_ingredients_text must contain only ingredient sections. For Drug Facts or OTC cosmetic labels, include Active ingredient(s) and Inactive ingredients, preserving those section labels when visible. Do not include Purpose, Uses, Warnings, Directions, Questions, distributor/address, website/social text, marketing claims, barcode numbers, certifications, recycling text, or other non-ingredient label copy in extracted_ingredients_text. For normal cosmetic labels, use only text after Ingredients/Inactive ingredients and stop before warning, directions, questions, address, website, or marketing sections. For food/drink, extract ingredient text plus nutrition_facts from the Nutrition Facts panel if visible, but keep Nutrition Facts out of extracted_ingredients_text. Prefer per-100g nutrition values when label math is clear; otherwise use the label values and serving size. If nutrition cannot be read, set fields to null. If the user provided Product type food or beauty, keep product_category as that type. Also infer item_category as a specific product type such as Deodorant, Mouthwash, Toothpaste, Shampoo, Conditioner, Body Wash, Lotion, Sunscreen, Crackers, Chips, Cereal, Candy, Sauce, Drink, or Snack. Classify conditioners, shampoos, hair masks, hair oils, lotions, creams, soaps, skincare, fragrance, and cosmetics as beauty. Cosmetic/INCI signals such as dimethicone, amodimethicone, behentrimonium chloride, cetrimonium chloride, polyquaternium, parfum/fragrance, phenoxyethanol, methylisothiazolinone, cetyl alcohol, stearyl alcohol, panthenol, and surfactants indicate beauty. Score from 0-100 using GreenScan scoring: start at 100, subtract about 18 for high risk ingredients, 8 for moderate risk, 3 for unknown risk. For food, apply extra penalties for added sugar, sugar syrups, flagged additives, added fats or oils, artificial colors, high fructose corn syrup, BHA/BHT/TBHQ, sodium nitrite/nitrate, brominated vegetable oil, Red No. 3/erythrosine, titanium dioxide/E171, potassium bromate or bromate flour improvers, propylparaben, benzoates, sulfites, azodicarbonamide, aluminum-containing additives, polysorbates, carrageenan, carboxymethylcellulose/cellulose gum, partially hydrogenated oils, artificial sweeteners, high sugar, high fat, high saturated fat, high sodium, or poor Nutri-Score-like quality. Use nutrition_facts to lower food scores for high sugar, fat, saturated fat, sodium, calories, or low fiber/protein where relevant. Do not rate sugary spreads, candy, sweet drinks, or heavily processed snack foods as excellent just because they lack artificial colors. Add positive_notes for food only when the ingredient list and nutrition facts support them, such as no added sugar detected, no flagged additives detected, no added fats/oils detected, low sugar, low sodium, or meaningful protein/fiber. For beauty, penalize fragrance/parfum and EU fragrance allergens, methylisothiazolinone or methylchloroisothiazolinone plus benzisothiazolinone/octylisothiazolinone, formaldehyde releasers such as DMDM hydantoin/quaternium-15/imidazolidinyl urea/diazolidinyl urea/bronopol/sodium hydroxymethylglycinate/methenamine/benzylhemiformal/polyoxymethylene urea, mercury compounds, lead acetate, hydroquinone/deoxyarbutin, boric acid/borates/perborates, phthalates such as dibutyl phthalate/DEHP/diethyl phthalate, lilial/butylphenyl methylpropional, triclosan/triclocarban, zinc pyrithione, toluene, methyl methacrylate, persulfate hair bleaches, coal tar dyes, PPD/resorcinol hair dyes, restricted parabens, oxybenzone/homosalate/octocrylene/4-methylbenzylidene camphor, DEA-related surfactants, talc, PFAS signals such as PTFE or perfluoro ingredients, synthetic microplastic/polymer signals such as polyethylene/polypropylene/PMMA/nylon-12/acrylates copolymer, D4/D5/D6 cyclic silicones, drying alcohols, and sulfates. When an ingredient is banned, limited, restricted, no longer authorized, or specifically warned about by US/FDA or EU sources, include that regulatory note in the ingredient reason. Add small bonuses for no high-risk ingredients, shorter lists, whole-food signals, or beauty formulas without fragrance/sensitizers. Score color is green for 75-100, yellow for 50-74, red for 0-49.",
+            "You analyze food and beauty products from images. Return only JSON. Use the front image for brand/product title. Use the back image or typed text for ingredient data. Critical extraction rule: extracted_ingredients_text must contain ingredient sections only, copied from visible label ingredient headings and ingredient text. For Drug Facts or OTC cosmetic labels, include only Active ingredient(s) and Inactive ingredients, preserving those section labels when visible. Exclude Purpose, Uses, Warnings, Directions, Other information, Questions, distributor/address, phone, website/social text, marketing claims, barcode/UPC numbers, certifications, recycling/storage/package text, and all other non-ingredient label copy from extracted_ingredients_text. For normal cosmetic/beauty/hair labels, use only text after Ingredients/Inactive ingredients and stop before warnings, directions, use instructions, address/contact, website/social, claims, recycling, storage, or package sections. For food/drink, extracted_ingredients_text must contain only the Ingredients section; Nutrition Facts belongs only in nutrition_facts. Exclude standalone Contains/allergen statements unless embedded in the ingredient sentence, but preserve real ingredient phrases such as contains less than 2% of and may contain 2% or less of. Marketing claims such as vegan, cruelty-free, paraben-free, aluminum-free, dermatologist tested, and clinically proven are not ingredients. Prefer per-100g nutrition values when label math is clear; otherwise use the label values and serving size. If nutrition cannot be read, set fields to null. If the user provided Product type food or beauty, keep product_category as that type. Also infer item_category as a specific product type such as Deodorant, Mouthwash, Toothpaste, Shampoo, Conditioner, Body Wash, Lotion, Sunscreen, Crackers, Chips, Cereal, Candy, Sauce, Drink, or Snack. Classify conditioners, shampoos, hair masks, hair oils, lotions, creams, soaps, skincare, fragrance, and cosmetics as beauty. Cosmetic/INCI signals such as dimethicone, amodimethicone, behentrimonium chloride, cetrimonium chloride, polyquaternium, parfum/fragrance, phenoxyethanol, methylisothiazolinone, cetyl alcohol, stearyl alcohol, panthenol, and surfactants indicate beauty. Score from 0-100 using GreenScan scoring: start at 100, subtract about 18 for high risk ingredients, 8 for moderate risk, 3 for unknown risk. For food, apply extra penalties for added sugar, sugar syrups, flagged additives, added fats or oils, artificial colors, high fructose corn syrup, BHA/BHT/TBHQ, sodium nitrite/nitrate, brominated vegetable oil, Red No. 3/erythrosine, titanium dioxide/E171, potassium bromate or bromate flour improvers, propylparaben, benzoates, sulfites, azodicarbonamide, aluminum-containing additives, polysorbates, carrageenan, carboxymethylcellulose/cellulose gum, partially hydrogenated oils, artificial sweeteners, high sugar, high fat, high saturated fat, high sodium, or poor Nutri-Score-like quality. Use nutrition_facts to lower food scores for high sugar, fat, saturated fat, sodium, calories, or low fiber/protein where relevant. Do not rate sugary spreads, candy, sweet drinks, or heavily processed snack foods as excellent just because they lack artificial colors. Add positive_notes for food only when the ingredient list and nutrition facts support them, such as no added sugar detected, no flagged additives detected, no added fats/oils detected, low sugar, low sodium, or meaningful protein/fiber. For beauty, penalize fragrance/parfum and EU fragrance allergens, methylisothiazolinone or methylchloroisothiazolinone plus benzisothiazolinone/octylisothiazolinone, formaldehyde releasers such as DMDM hydantoin/quaternium-15/imidazolidinyl urea/diazolidinyl urea/bronopol/sodium hydroxymethylglycinate/methenamine/benzylhemiformal/polyoxymethylene urea, mercury compounds, lead acetate, hydroquinone/deoxyarbutin, boric acid/borates/perborates, phthalates such as dibutyl phthalate/DEHP/diethyl phthalate, lilial/butylphenyl methylpropional, triclosan/triclocarban, zinc pyrithione, toluene, methyl methacrylate, persulfate hair bleaches, coal tar dyes, PPD/resorcinol hair dyes, restricted parabens, oxybenzone/homosalate/octocrylene/4-methylbenzylidene camphor, DEA-related surfactants, talc, PFAS signals such as PTFE or perfluoro ingredients, synthetic microplastic/polymer signals such as polyethylene/polypropylene/PMMA/nylon-12/acrylates copolymer, D4/D5/D6 cyclic silicones, drying alcohols, and sulfates. When an ingredient is banned, limited, restricted, no longer authorized, or specifically warned about by US/FDA or EU sources, include that regulatory note in the ingredient reason. Add small bonuses for no high-risk ingredients, shorter lists, whole-food signals, or beauty formulas without fragrance/sensitizers. Score color is green for 75-100, yellow for 50-74, red for 0-49.",
         },
         {
           role: "user",
@@ -1028,8 +1041,8 @@ export default {
               text: [
                 `Product type: ${productType || "unknown"}.`,
                 `Barcode: ${barcode || "unknown"}.`,
-                productType === "beauty" ? "If this is a Drug Facts deodorant/antiperspirant or OTC beauty label, extract Active ingredient(s) and Inactive ingredients only; ignore Uses, Purpose, Warnings, Directions, Questions, addresses, and marketing text." : "",
-                "Show only ingredient names in extracted_ingredients_text and the ingredients array. Exclude Nutrition Facts, Contains/May contain allergen lines, warnings, directions, addresses, websites, marketing claims, barcodes, and package-size text.",
+                productType === "beauty" ? "If this is a Drug Facts deodorant/antiperspirant or OTC beauty label, extract Active ingredient(s) and Inactive ingredients only; ignore Purpose, Uses, Warnings, Directions, Other information, Questions, distributor/address, phone, website/social, barcode, recycling/storage/package, and marketing text." : "",
+                "Show only real ingredient names/phrases in extracted_ingredients_text and the ingredients array. Exclude Nutrition Facts, standalone Contains/May contain allergen lines, warnings, directions, uses, purpose, other information, addresses, phone numbers, websites/social handles, marketing claims, certifications, barcodes/UPC codes, recycling/storage copy, and package-size text. Preserve ingredient phrases like contains less than 2% of and may contain 2% or less of.",
                 productType === "food"
                   ? `User says Nutrition Facts are ${hasNutritionFacts === "yes" ? "included in the submitted label/text" : hasNutritionFacts === "no" ? "not included in the submitted label/text" : "not answered"}. ${hasNutritionFacts === "no" ? "Do not invent nutrition_facts; set nutrition_facts fields to null unless clearly present in typed text or image." : "Extract nutrition_facts only when visible/readable; use null for unreadable fields."}`
                   : "Nutrition Facts are not applicable for this product type.",
@@ -1258,25 +1271,29 @@ function normalizeIngredientTextTypos(value) {
     .replace(/\bispartame\b/gi, "aspartame");
 }
 
+const NON_INGREDIENT_SECTION_STOP = "\\b(?:(?:drug|nutrition|supplement) facts|purpose|uses?|warnings?|directions?|questions?|other information|serving size|calories|%\\s*daily value|(?:contains|may contain)\\s*:?\\s*(?:milk|eggs?|fish|shellfish|tree nuts?|peanuts?|wheat|soybeans?|sesame)\\b|allergen(?:s)?|produced in|made in (?:a )?facility|distributed by|dist\\. by|manufactured by|mfd\\. by|marketed by|packaged by|copyright|trademark|phone|call|contact us|questions or comments|website|www\\.|https?://|\\.com\\b|catch us|follow us|connect with|facebook|instagram|twitter|x\\.com|tiktok|@|scan|barcode|upc|qr code|recycling|recyclable|recycle|dispose|storage|store in|keep in|best before|best by|sell by|use by|expiration|exp\\.?|lot|batch|net wt|net weight|contents|package|packaging|for external use|keep out of reach|when using|do not use|stop use|ask a doctor|if swallowed|get medical help|poison control|active ingredient[s]?\\s*$|inactive ingredient[s]?\\s*$|vegan|cruelty[- ]?free|paraben[- ]?free|aluminum[- ]?free|dermatologist tested|clinically proven|certified|certification|not tested on animals|no artificial|gluten[- ]?free|non[- ]?gmo|plant[- ]?based)\\b";
+const DRUG_FACTS_ACTIVE_STOP = "\\b(?:purpose|uses?|warnings?|directions?|inactive ingredients?|questions?|other information|when using|do not use|for external use|keep out of reach|stop use|ask a doctor|if swallowed|get medical help|poison control)\\b";
+const DRUG_FACTS_INACTIVE_STOP = "\\b(?:purpose|uses?|warnings?|directions?|questions?|other information|distributed by|dist\\. by|manufactured by|mfd\\. by|marketed by|packaged by|phone|call|contact us|questions or comments|website|www\\.|https?://|\\.com\\b|catch us|follow us|connect with|facebook|instagram|twitter|x\\.com|tiktok|@|for external use|keep out of reach|when using|do not use|stop use|ask a doctor|if swallowed|get medical help|poison control|barcode|upc|qr code|recycling|recyclable|storage|store in|best before|best by|lot|batch|net wt|net weight|vegan|cruelty[- ]?free|paraben[- ]?free|aluminum[- ]?free|dermatologist tested|clinically proven|certified|certification|not tested on animals)\\b";
+
+// Smoke samples: Drug Facts keeps active/inactive only; food preserves "contains less than 2% of" while dropping Nutrition Facts/contact/claims.
 function extractIngredientSectionsOnly(value, options = {}) {
   const text = String(value || "").replace(/\r/g, "\n").replace(/[ \t]+/g, " ").trim();
   if (!text) return "";
   const compact = text.replace(/\n+/g, " ").replace(/\s{2,}/g, " ").trim();
   const sections = [];
-  const stopPattern = "\\b(?:purpose|uses?|warnings?|directions?|questions?|nutrition facts|supplement facts|serving size|calories|(?:contains|may contain)\\s*:\\s*\\w+|allergen(?:s)?|produced in|made in (?:a )?facility|distributed by|dist\\. by|manufactured by|mfd\\. by|website|www\\.|catch us|follow us|connect with|certified|@|scan|barcode|drug facts|other information|storage|best before|best by|lot|net wt|net weight|for external use|keep out of reach|when using|do not use|inactive ingredient[s]?\\s*$)\\b";
-  const activeMatch = compact.match(/\bactive ingredients?\b\s*:?\s*([\s\S]*?)(?=\b(?:purpose|uses?|warnings?|directions?|inactive ingredients?|questions?|other information|when using|do not use|for external use|keep out of reach)\b|$)/i);
+  const activeMatch = compact.match(new RegExp("\\bactive ingredients?\\b\\s*:?\\s*([\\s\\S]*?)(?=" + DRUG_FACTS_ACTIVE_STOP + "|$)", "i"));
   if (activeMatch?.[1]) {
     const cleaned = cleanExtractedIngredientSection(activeMatch[1]);
-    if (cleaned) sections.push(`Active ingredient: ${cleaned}`);
+    if (cleaned) sections.push("Active ingredient: " + cleaned);
   }
-  const inactiveMatch = compact.match(/\binactive ingredients?\b\s*:?\s*([\s\S]*?)(?=\b(?:questions?|directions?|warnings?|distributed by|dist\\. by|manufactured by|mfd\\. by|website|www\\.|catch us|follow us|connect with|certified|@|other information|for external use|keep out of reach|when using|do not use)\b|$)/i);
+  const inactiveMatch = compact.match(new RegExp("\\binactive ingredients?\\b\\s*:?\\s*([\\s\\S]*?)(?=" + DRUG_FACTS_INACTIVE_STOP + "|$)", "i"));
   if (inactiveMatch?.[1]) {
     const cleaned = cleanExtractedIngredientSection(inactiveMatch[1]);
-    if (cleaned) sections.push(`Inactive ingredients: ${cleaned}`);
+    if (cleaned) sections.push("Inactive ingredients: " + cleaned);
   }
   if (sections.length) return sections.join("; ");
 
-  const ingredientMatch = compact.match(new RegExp("\\bingredients?\\b\\s*:?\\s*([\\s\\S]*?)(?=" + stopPattern + "|$)", "i"));
+  const ingredientMatch = compact.match(new RegExp("\\bingredients?\\b\\s*:?\\s*([\\s\\S]*?)(?=" + NON_INGREDIENT_SECTION_STOP + "|$)", "i"));
   if (ingredientMatch?.[1]) {
     const cleaned = cleanExtractedIngredientSection(ingredientMatch[1]);
     if (cleaned) return cleaned;
@@ -1289,12 +1306,9 @@ function extractIngredientSectionsOnly(value, options = {}) {
 
 function cleanExtractedIngredientSection(value) {
   return normalizeIngredientTextTypos(value)
-    .replace(/\b(?:purpose|uses?|warnings?|directions?|questions?|nutrition facts|supplement facts|serving size|calories|other information|when using|do not use)\b[\s\S]*$/i, "")
-    .replace(/\b(?:(?:contains|may contain)\s*:\s*\w+|allergen(?:s)?|produced in|made in (?:a )?facility)\b[\s\S]*$/i, "")
-    .replace(/\b(?:distributed by|dist\. by|manufactured by|mfd\. by|call|website|www\.|catch us|follow us|connect with|@)\b[\s\S]*$/i, "")
+    .replace(new RegExp(NON_INGREDIENT_SECTION_STOP + "[\\s\\S]*$", "i"), "")
     .replace(/\b(?:for external use only|keep out of reach of children|stop use|ask a doctor|if swallowed|get medical help|poison control)\b[\s\S]*$/i, "")
     .replace(/\b(?:apply to|use daily|shake well|suggested use|dosage|reduces underarm wetness|antiperspirant)\b[\s\S]*$/i, "")
-    .replace(/\b(?:certified|certification|recyclable|sustainably|not tested on animals|storage|best before|best by|lot|net wt|net weight)\b[\s\S]*$/i, "")
     .replace(/\b1[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, " ")
     .replace(/\b\d{6,14}\b/g, " ")
     .replace(/\s*[,;]\s*/g, ", ")
@@ -1333,17 +1347,18 @@ function normalizeAnalysisIngredientTypos(analysis) {
 function cleanIngredientName(value) {
   return String(value || "")
     .replace(/^\s*(?:active ingredients?|inactive ingredients?|ingredients?)\s*:?\s*/i, "")
-    .replace(/\bpurpose\b[\s\S]*$/i, "")
-    .replace(/^[\s:.,;-]+|[\s:.,;-]+$/g, "")
+    .replace(new RegExp(NON_INGREDIENT_SECTION_STOP + "[\\s\\S]*$", "i"), "")
+    .replace(/^\s*:|[\s:.,;-]+$/g, "")
     .trim();
 }
 
 function isNonIngredientLabelFragment(value) {
   const text = String(value || "").toLowerCase().trim();
   if (!text) return true;
-  if (/^(?:purpose|uses?|warnings?|directions?|questions?|nutrition facts|supplement facts|serving size|calories|(?:contains|may contain)\s*:\s*\w+|allergen(?:s)?|other information|drug facts|distributed by|dist\. by|manufactured by|website|www\.|catch us|follow us|connect with|certified|barcode|scan|storage|best before|best by|lot|net wt|net weight|when using|do not use)\b/.test(text)) return true;
-  if (/\b(?:for external use only|keep out of reach of children|do not use|stop use|ask a doctor|if swallowed|poison control|apply to underarms|shake well|suggested use|dosage|reduces underarm wetness|not tested on animals|recyclable|made in a facility|produced in a facility)\b/.test(text)) return true;
+  if (new RegExp("^(?:" + NON_INGREDIENT_SECTION_STOP.replace(/^\\b\(\?:|\)\\b$/g, "") + ")", "i").test(text)) return true;
+  if (/\b(?:for external use only|keep out of reach of children|do not use|stop use|ask a doctor|if swallowed|poison control|apply to underarms|shake well|suggested use|dosage|reduces underarm wetness|not tested on animals|recyclable|made in a facility|produced in a facility|vegan|cruelty[- ]?free|paraben[- ]?free|aluminum[- ]?free|dermatologist tested|clinically proven)\b/.test(text)) return true;
   if (/\b1[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(text)) return true;
+  if (/^\d{6,14}$/.test(text)) return true;
   return false;
 }
 
@@ -1701,12 +1716,12 @@ async function openAiIngredientOcr(env, imageUrl) {
     [
       {
         role: "system",
-        content: "Extract only product ingredient section text from the label image. Return JSON only. Do not analyze, score, or save anything. If this is a Drug Facts or OTC beauty label, include Active ingredient(s) and Inactive ingredients, preserving those labels. Ignore Purpose, Uses, Warnings, Directions, Questions, other information, distributor/address, website/social text, marketing claims, barcode numbers, and certifications. For normal labels, return only the Ingredients section. If no ingredient section is visible, return an empty ingredient_text string.",
+        content: "Extract only product ingredient section text from the label image. Return JSON only. Do not analyze, score, or save anything. If this is a Drug Facts or OTC beauty label, include Active ingredient(s) and Inactive ingredients only, preserving those labels. Ignore Purpose, Uses, Warnings, Directions, Other information, Questions, distributor/address, phone, website/social text, marketing claims, barcode/UPC numbers, certifications, recycling/storage/package copy, and Nutrition Facts. For food/drink labels, return only the Ingredients section and exclude standalone Contains/allergen statements unless embedded in the ingredient sentence. Preserve ingredient phrases like contains less than 2% of and may contain 2% or less of. If no ingredient section is visible, return an empty ingredient_text string.",
       },
       {
         role: "user",
         content: [
-          { type: "text", text: "Read only the ingredient section(s) from this photo. For Drug Facts, return Active ingredient and Inactive ingredients only." },
+          { type: "text", text: "Read only ingredient section(s) from this photo. For Drug Facts, return Active ingredient and Inactive ingredients only. Keep Nutrition Facts, Purpose, Uses, Warnings, Directions, Other information, Questions, contact text, claims, barcode/UPC, recycling, storage, and package copy out of ingredient_text." },
           { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
         ],
       },
@@ -1749,6 +1764,8 @@ function isHttpImageUrl(value) {
 }
 
 async function enforcePublicWriteLimit(env, request, area, limit) {
+  const cloudBudget = await enforceFreeTierBudget(env, "public-writes", FREE_TIER_BUDGETS.publicWrites);
+  if (!cloudBudget.ok) return cloudBudget;
   const identity = getRateIdentity(request, "", "");
   const key = `write-usage:${todayKey()}:${area}:${identity}`;
   const count = Number(await env.PRODUCT_CACHE.get(key)) || 0;
@@ -1758,12 +1775,22 @@ async function enforcePublicWriteLimit(env, request, area, limit) {
 }
 
 async function enforceIdentityWriteLimit(env, identity, area, limit) {
+  const cloudBudget = await enforceFreeTierBudget(env, "account-syncs", FREE_TIER_BUDGETS.accountSyncs);
+  if (!cloudBudget.ok) return cloudBudget;
   const safeIdentity = String(identity || "").replace(/[^a-z0-9:@._-]/gi, "").slice(0, 180) || "unknown";
   const key = `write-usage:${todayKey()}:${area}:${safeIdentity}`;
   const count = Number(await env.PRODUCT_CACHE.get(key)) || 0;
   if (count >= limit) return { ok: false, error: "Too many sync updates today. Try again tomorrow." };
   await setDailyUsage(env, key, count + 1);
   return { ok: true };
+}
+
+async function enforceFreeTierBudget(env, bucket, limit) {
+  const key = `cloudflare-budget:${todayKey()}:${bucket}`;
+  const count = Number(await env.PRODUCT_CACHE.get(key)) || 0;
+  if (count >= limit) return { ok: false, error: FREE_TIER_LIMIT_MESSAGE };
+  await env.PRODUCT_CACHE.put(key, String(count + 1), { expirationTtl: 60 * 60 * 48 });
+  return { ok: true, used: count + 1, limit };
 }
 
 function getRateIdentity(request, userEmail, userId) {
@@ -2750,11 +2777,11 @@ function sanitizeAppLimits(value = {}, fallback = DEFAULT_LIMITS) {
   const base = { ...DEFAULT_LIMITS, ...(fallback || {}) };
   const settings = value && typeof value === "object" ? value : {};
   return {
-    signedInAi: clampInteger(settings.signedInAi, base.signedInAi, 1, 100),
-    guestAi: clampInteger(settings.guestAi, base.guestAi, 0, 25),
-    searches: clampInteger(settings.searches, base.searches, 1, 200),
-    categoryVerifications: clampInteger(settings.categoryVerifications, base.categoryVerifications, 0, 50),
-    imageUploads: clampInteger(settings.imageUploads, base.imageUploads, 0, 50),
+    signedInAi: clampInteger(settings.signedInAi, base.signedInAi, 1, 25),
+    guestAi: clampInteger(settings.guestAi, base.guestAi, 0, 8),
+    searches: clampInteger(settings.searches, base.searches, 1, 40),
+    categoryVerifications: clampInteger(settings.categoryVerifications, base.categoryVerifications, 0, 12),
+    imageUploads: clampInteger(settings.imageUploads, base.imageUploads, 0, 12),
   };
 }
 

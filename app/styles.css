@@ -6415,7 +6415,7 @@ body.theme-dark .bottom-nav {
     grid-template-areas:
       "topbar topbar"
       "scan result"
-      ". description"
+      "description description"
       "fallback fallback";
     gap: 16px 18px;
   }
@@ -6812,7 +6812,7 @@ body.theme-dark .bottom-nav {
     grid-template-areas:
       "topbar topbar"
       "scan result"
-      ". description"
+      "description description"
       "fallback fallback";
     gap: 18px;
   }
@@ -7125,6 +7125,12 @@ body.theme-dark .bottom-nav {
   }
 
   body.scan-view .scanner-empty {
+    position: absolute;
+    inset: 27% 13% 25%;
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
     border: 0;
     background: transparent;
   }
@@ -7576,10 +7582,22 @@ body.theme-dark .bottom-nav {
   }
 
   body.scan-view .result-panel .ingredient-row {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
     border-color: rgba(139, 224, 194, 0.15);
     color: #f3fff9;
     background: rgba(255, 255, 255, 0.035);
     box-shadow: none;
+  }
+
+  body.scan-view .result-panel .ingredient-row .ingredient-chevron {
+    display: none;
+  }
+
+  body.scan-view .result-panel .ingredient-row .risk {
+    max-width: 78px;
+    min-width: 64px;
+    padding: 5px 7px;
+    font-size: 0.72rem;
   }
 
   body.scan-view .result-panel .ingredient-row + .ingredient-row {
