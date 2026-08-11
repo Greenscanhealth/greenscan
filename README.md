@@ -40,6 +40,12 @@ Guide starts a fresh conversation when a different product is selected and does 
 
 The hosted app provides a limited number of included Guide prompts. Users may optionally configure one supported AI-provider key on their own device. Personal keys are not synced to the GreenScan account, included in offline queues, or committed to this repository. Self-hosted copies must use their own provider credentials and billing account.
 
+## Admin-Reviewed AI Repairs
+
+When GreenScan AI sees signs that an existing saved listing may be wrong, it can create a suggested repair instead of changing the public database automatically. Admin review is required before a saved product is updated.
+
+Suggested repairs can be created for issues such as missing ingredients, broken text encoding, generic product names, meaningful score mismatches, non-ingredient label text mixed into ingredients, or unrealistic nutrition values.
+
 ## Self-Hosting and API Keys
 
 This repository does not include GreenScan production secrets, API keys, credits, or free-trial usage.

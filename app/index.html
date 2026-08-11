@@ -360,12 +360,12 @@
               </span>
               <div>
                 <p>GreenScan release</p>
-                <h3 id="landingReleaseTitle">Version 1.0.4</h3>
+                <h3 id="landingReleaseTitle">Version 1.0.6</h3>
               </div>
             </div>
             <div class="landing-release-update">
               <span>Latest update</span>
-              <strong>Faster product search, region-aware Guide answers, product cards, and clearer Guide activity timing.</strong>
+              <strong>Ask Guide now helps choose the right product first, uses newer AI model recommendations, and has a cleaner chat experience.</strong>
             </div>
             <div class="landing-service-status" id="landingServiceStatus" role="status" aria-live="polite">
               <span class="landing-service-dot checking" aria-hidden="true"></span>
@@ -499,20 +499,38 @@
           </div>
         </header>
         <div class="guide-welcome" id="guideWelcome">
+          <div class="guide-orb" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H9l-4 3v-3a4 4 0 0 1-2-3.5V9a4 4 0 0 1 2-4Z" />
+              <path d="m15.5 3 .55 1.45L17.5 5l-1.45.55L15.5 7l-.55-1.45L13.5 5l1.45-.55L15.5 3Z" />
+            </svg>
+          </div>
           <div class="guide-hero-copy">
             <p class="eyebrow">A clearer way to choose</p>
-            <h2 id="guideGreeting">Hi. What can Guide help you understand?</h2>
-            <p>Ask about ingredients, enter a barcode, find a product, or get a simpler explanation of a GreenScan score.</p>
+            <h2 id="guideGreeting">What do you want to check?</h2>
+            <p>Ask about products, ingredients, scores, or your restrictions.</p>
           </div>
           <div class="guide-intro-grid">
-            <article><img src="./greenscan-search-icon.png" alt="GreenScan product lookup" /><strong>Find products</strong><span>Enter a name or barcode and choose a verified listing.</span></article>
-            <article><img src="./greenscan-index-logo.png" alt="GreenScan ingredient guidance" /><strong>Understand ingredients</strong><span>Get calm, plain-language context about potential concerns.</span></article>
-            <article><img src="./greenscan-icon-192.png" alt="GreenScan personalized guidance" /><strong>Use your preferences</strong><span>Guide considers your dietary filters and personal avoid list.</span></article>
-          </div>
-          <div class="guide-suggestions" aria-label="Suggested Guide questions">
-            <button type="button" data-guide-prompt="Explain the biggest ingredient concerns I should know about.">Explain ingredient concerns</button>
-            <button type="button" data-guide-prompt="Help me find a product by name or barcode.">Find a product</button>
-            <button type="button" data-guide-prompt="How does GreenScan decide a product score?">Explain GreenScan scores</button>
+            <button type="button" data-guide-prompt="Help me find a product by name or barcode.">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg></span>
+              <strong>Find a product</strong>
+              <small>Search by name or barcode.</small>
+            </button>
+            <button type="button" data-guide-prompt="Tell me what matters most about a product or ingredient. Focus on the biggest concerns, useful positives, and my restrictions.">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13c7 0 11-4 14-10 1 8-2 16-10 16H5v-6Z" /><path d="M5 19c3-5 7-8 14-10" /></svg></span>
+              <strong>What matters most?</strong>
+              <small>Get the quick takeaway.</small>
+            </button>
+            <button type="button" data-guide-prompt="Check this against my restrictions, dietary filters, and personal avoid list.">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M4 17h16" /><circle cx="9" cy="7" r="2" /><circle cx="15" cy="17" r="2" /></svg></span>
+              <strong>Check my restrictions</strong>
+              <small>Use your saved preferences.</small>
+            </button>
+            <button type="button" data-guide-prompt="Find one or two better product options if available. Use GreenScan data first and respect my restrictions and avoid list.">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17 9 12l4 4 7-9" /><path d="M15 7h5v5" /></svg></span>
+              <strong>Find better options</strong>
+              <small>Compare cleaner matches.</small>
+            </button>
           </div>
         </div>
         <div class="guide-messages" id="guideMessages" aria-live="polite"></div>
@@ -1004,6 +1022,27 @@
           </button>
         </div>
         <div class="changelog-list">
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">Version 1.0.6</p>
+            <h3>Guide product choice and model updates</h3>
+            <ul>
+              <li>Updated recommended AI models, including newer Gemini options and safer migration for discontinued model names.</li>
+              <li>Added retry controls for AI analysis errors so users can try again without restarting the scan flow.</li>
+              <li>Improved Ask Guide so product searches show possible matches first and wait for the user to pick the right listing before spending a full explanation prompt.</li>
+              <li>Refreshed the Guide welcome, product cards, score rings, loading states, and desktop spacing so the chat feels cleaner on phones, iPad, and PC.</li>
+              <li>Kept user API keys device-only and added safer provider handling for Guide and label analysis.</li>
+            </ul>
+          </article>
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">Version 1.0.5</p>
+            <h3>Admin-reviewed AI repair suggestions</h3>
+            <ul>
+              <li>Added an AI suggested repair workflow for listings with missing ingredients, broken text, generic names, score mismatches, or unrealistic nutrition data.</li>
+              <li>Existing saved listings are no longer overwritten by AI when meaningful differences are detected; suggestions wait for admin approval.</li>
+              <li>Added AI repair labels, confidence, and reason notes to the admin report queue.</li>
+              <li>Kept new-product database saves working while protecting existing listings from unreviewed AI edits.</li>
+            </ul>
+          </article>
           <article class="source-card changelog-entry">
             <p class="eyebrow">Version 1.0.4</p>
             <h3>Faster Guide search and product cards</h3>

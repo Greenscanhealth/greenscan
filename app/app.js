@@ -298,21 +298,22 @@ const aiProviderModels = {
     { value: "claude-sonnet-5", label: "Balanced: Claude Sonnet 5 (recommended)" },
     { value: "claude-haiku-4-5", label: "Least cost: Claude Haiku 4.5" },
     { value: "claude-opus-5", label: "Best quality: Claude Opus 5" },
-    { value: "claude-3-5-sonnet-latest", label: "Legacy: Claude 3.5 Sonnet" },
+    { value: "claude-fable-5", label: "Highest quality: Claude Fable 5" },
   ],
   google: [
-    { value: "gemini-2.5-flash", label: "Balanced: Gemini 2.5 Flash (recommended)" },
-    { value: "gemini-2.5-flash-lite", label: "Least cost: Gemini 2.5 Flash-Lite" },
-    { value: "gemini-2.5-pro", label: "Best quality: Gemini 2.5 Pro" },
-    { value: "gemini-2.0-flash", label: "Legacy: Gemini 2.0 Flash" },
+    { value: "gemini-3.6-flash", label: "Balanced: Gemini 3.6 Flash (recommended)" },
+    { value: "gemini-3.5-flash-lite", label: "Least cost: Gemini 3.5 Flash-Lite" },
+    { value: "gemini-3.5-flash", label: "Higher quality: Gemini 3.5 Flash" },
+    { value: "gemini-3.1-flash-lite", label: "Budget: Gemini 3.1 Flash-Lite" },
   ],
   deepseek: [
     { value: "deepseek-v4-flash", label: "Least cost / Balanced: DeepSeek V4 Flash (recommended)" },
-    { value: "deepseek-reasoner", label: "Reasoning quality: DeepSeek Reasoner" },
+    { value: "deepseek-v4-pro", label: "Best quality: DeepSeek V4 Pro" },
   ],
   zai: [
     { value: "glm-5v-turbo", label: "Balanced / Best quality: GLM-5V Turbo (recommended)" },
-    { value: "glm-4.5v", label: "Least cost: GLM-4.5V" },
+    { value: "glm-4.6v-flash", label: "Least cost: GLM-4.6V Flash" },
+    { value: "glm-4.6v", label: "Balanced cost: GLM-4.6V" },
   ],
 };
 
@@ -329,20 +330,21 @@ const guideProviderModels = {
     { value: "claude-haiku-4-5", label: "Least cost: Claude Haiku 4.5" },
     { value: "claude-sonnet-5", label: "Balanced: Claude Sonnet 5 (recommended)" },
     { value: "claude-opus-5", label: "Best quality: Claude Opus 5" },
+    { value: "claude-fable-5", label: "Highest quality: Claude Fable 5" },
   ],
   google: [
     { value: "gemini-3.5-flash-lite", label: "Least cost: Gemini 3.5 Flash-Lite" },
     { value: "gemini-3.6-flash", label: "Balanced: Gemini 3.6 Flash (recommended)" },
-    { value: "gemini-3.1-pro", label: "Best quality: Gemini 3.1 Pro" },
+    { value: "gemini-3.5-flash", label: "Best quality: Gemini 3.5 Flash" },
+    { value: "gemini-3.1-flash-lite", label: "Budget: Gemini 3.1 Flash-Lite" },
   ],
   deepseek: [
     { value: "deepseek-v4-flash", label: "Least cost: DeepSeek V4 Flash (recommended)" },
     { value: "deepseek-v4-pro", label: "Best quality: DeepSeek V4 Pro" },
-    { value: "deepseek-reasoner", label: "Reasoning: DeepSeek Reasoner" },
   ],
   zai: [
-    { value: "glm-4.7-flash", label: "Least cost: GLM-4.7 Flash" },
-    { value: "glm-5", label: "Balanced: GLM-5 (recommended)" },
+    { value: "glm-5-turbo", label: "Least cost: GLM-5 Turbo" },
+    { value: "glm-5.2", label: "Balanced: GLM-5.2 (recommended)" },
     { value: "glm-5.1", label: "Best quality: GLM-5.1" },
   ],
 };
@@ -2754,8 +2756,8 @@ function renderGuideProductCard(analysis) {
       <p>Guide can summarize this listing using the product data already shown on this page.</p>
       <div class="product-guide-actions">
         <button type="button" data-ask-guide="Summarize this product in plain language. Focus on the most useful positives and potential concerns.">Quick summary</button>
-        <button type="button" data-ask-guide="Explain why this product received its GreenScan score. Be concise and refer only to the supplied listing.">Why this score?</button>
-        <button type="button" data-ask-guide="Based on the supplied listing, who might want to avoid or limit this product? Do not give medical advice.">Who may avoid it?</button>
+        <button type="button" data-ask-guide="Tell me what matters most about this product. Focus on the biggest concerns, useful positives, and my restrictions or avoid-list matches. Do not repeat the full score breakdown.">What matters most?</button>
+        <button type="button" data-ask-guide="Find one or two better product options if available. Use GreenScan product data first, respect my restrictions and avoid list, and explain why they may fit better.">Find better options</button>
       </div>
       <small>No AI request is made until you choose a question.</small>
     </section>
@@ -3718,12 +3720,33 @@ function getBetterAlternatives(analysis) {
       seen.add(normalized.barcode);
       return normalized.category === analysis.category
         && normalizeComparableItemType(normalized) === currentType
+        && productHasEnoughDataForAlternative(normalized)
         && !productMatchesPersonalAvoidList(normalized)
         && Number(normalized.safetyScore || 0) > Number(analysis.safetyScore || 0);
     })
     .map(normalizeRenderableAnalysis)
     .sort((a, b) => Number(b.safetyScore || 0) - Number(a.safetyScore || 0))
     .slice(0, 3);
+}
+
+function productHasEnoughDataForAlternative(analysis) {
+  const normalized = normalizeRenderableAnalysis(analysis);
+  if (normalized?.externalSource || normalized?.hasGreenScanScore === false) return false;
+  if (!Number.isFinite(Number(normalized?.safetyScore))) return false;
+  const ingredients = Array.isArray(normalized?.ingredients) ? normalized.ingredients : [];
+  const ingredientNames = ingredients
+    .map((item) => item?.rawName || item?.raw_name || item?.normalizedName || item?.normalized_name || item?.name || "")
+    .map((name) => normalizeComparableText(name))
+    .filter(Boolean);
+  if (ingredientNames.length < 3) return false;
+  const unknownCount = ingredients.filter((item) => normalizeRisk(item?.risk) === "unknown").length;
+  if (ingredients.length && unknownCount / ingredients.length > 0.75) return false;
+  const rawText = [normalized.ingredientsText, normalized.extracted_ingredients_text, ...ingredientNames].filter(Boolean).join(", ");
+  const rawParts = rawText.split(/\s*,\s*|\s*;\s*/).map((item) => item.trim()).filter(Boolean);
+  if (rawParts.length >= 3) return true;
+  const text = normalizeComparableText(rawText);
+  if (!text) return false;
+  return text.split(/\s+/).filter((token) => token.length > 2).length >= 8 && /\b(water|aqua|glycerin|oil|acid|extract|fragrance|parfum|sodium|alcohol|glycol|starch|flour|sugar|salt)\b/.test(text);
 }
 
 function productMatchesPersonalAvoidList(analysis) {
@@ -5476,8 +5499,13 @@ function renderAnalysisError(error) {
       <p class="eyebrow">AI analysis failed</p>
       <h2>${escapeHtml(message)}</h2>
       <p>Try a clearer full back-label photo, or type/paste the ingredients and nutrition facts and analyze again.</p>
+      <button type="button" class="primary-button" data-retry-analysis>Retry analysis</button>
     </div>
   `;
+  els.resultPanel.querySelector("[data-retry-analysis]")?.addEventListener("click", () => {
+    updateAnalyzeButton();
+    analyzeCurrentPhoto();
+  });
   els.fallbackPanel.classList.remove("hidden");
   scrollToResultPanel();
   toast("AI analysis failed.");
@@ -6905,7 +6933,7 @@ function loadUserAiSettings() {
     }
     const active = saved.profiles[saved.provider] || {};
     saved.apiKey = active.apiKey || saved.apiKey || "";
-    saved.model = active.model || saved.model || getRecommendedAiModel(saved.provider);
+    saved.model = normalizeSavedAiModel(saved.provider, active.model || saved.model || getRecommendedAiModel(saved.provider));
     saved.profiles = active.apiKey ? { [saved.provider]: { apiKey: active.apiKey, model: saved.model } } : {};
     return saved;
   } catch {
@@ -6922,7 +6950,7 @@ function persistUserAiSettings(settings = state.userAiSettings) {
     profiles: aiProviderModels[favoriteProvider] && favoriteProfile?.apiKey ? {
       [favoriteProvider]: {
         apiKey: String(favoriteProfile.apiKey || "").trim(),
-        model: favoriteProfile.model || getRecommendedAiModel(favoriteProvider),
+        model: normalizeSavedAiModel(favoriteProvider, favoriteProfile.model || getRecommendedAiModel(favoriteProvider)),
       },
     } : {},
   };
@@ -6958,9 +6986,40 @@ function getRecommendedAiModel(provider = "openai") {
 
 function getSelectedUserAiModel() {
   const provider = state.userAiSettings.provider || "openai";
-  const model = state.userAiSettings.model || "";
+  const model = normalizeSavedAiModel(provider, state.userAiSettings.model || "");
   const models = aiProviderModels[provider] || aiProviderModels.openai;
   return models.some((option) => option.value === model) ? model : getRecommendedAiModel(provider);
+}
+
+function normalizeSavedAiModel(provider, model) {
+  const value = String(model || "").trim();
+  const upgrades = {
+    google: {
+      "gemini-2.5-flash": "gemini-3.6-flash",
+      "gemini-2.5-pro": "gemini-3.5-flash",
+      "gemini-2.5-flash-lite": "gemini-3.5-flash-lite",
+      "gemini-2.0-flash": "gemini-3.6-flash",
+      "gemini-1.5-flash": "gemini-3.6-flash",
+      "gemini-1.5-pro": "gemini-3.5-flash",
+    },
+    anthropic: {
+      "claude-3-5-sonnet-latest": "claude-sonnet-5",
+      "claude-3-7-sonnet-20250219": "claude-sonnet-5",
+      "claude-sonnet-4-20250514": "claude-sonnet-5",
+      "claude-opus-4-20250514": "claude-opus-5",
+      "claude-opus-4-1-20250805": "claude-opus-5",
+    },
+    deepseek: {
+      "deepseek-reasoner": "deepseek-v4-pro",
+    },
+    zai: {
+      "glm-4.7-flash": "glm-5-turbo",
+      "glm-4.5v": "glm-4.6v",
+      "glm-4.5v-flash": "glm-4.6v-flash",
+      "glm-5v": "glm-5v-turbo",
+    },
+  };
+  return upgrades[provider]?.[value] || value;
 }
 
 function openGuide(options = {}) {
@@ -7108,7 +7167,7 @@ async function sendGuideMessage(event) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Guide could not respond.");
     const responseProducts = Array.isArray(data.products) ? data.products.slice(0, 3) : [];
-    if (!state.guideProduct && responseProducts[0]?.barcode) {
+    if (!data.needsProductChoice && !state.guideProduct && responseProducts[0]?.barcode) {
       state.guideProduct = normalizeRenderableAnalysis(responseProducts[0]);
     }
     state.guideMessages.push({
@@ -7131,7 +7190,7 @@ async function sendGuideMessage(event) {
 function startGuideActivity(message) {
   stopGuideActivity();
   const text = String(message || "").toLowerCase();
-  const searching = /\b(find|search|look up|lookup|recommend|alternative|alternatives|swap|swaps|barcode|product)\b/.test(text) || /\b\d{6,14}\b/.test(text);
+  const searching = /\b(find|search|look up|lookup|recommend|alternative|alternatives|swap|swaps|barcode|product)\b/.test(text) || /\b\d{6,14}\b/.test(text) || looksLikeGuideProductLookup(message);
   state.guideActivityLabel = searching ? "Searching products" : "Thinking";
   state.guideActivityStartedAt = Date.now();
   state.guideActivityTimer = window.setInterval(updateGuideActivityClock, 1000);
@@ -7152,6 +7211,7 @@ function updateGuideActivityClock() {
 }
 
 function isNewGuideProductRequest(message) {
+  if (looksLikeGuideProductLookup(message)) return true;
   const text = String(message || "").trim().toLowerCase();
   if (/\b\d{6,14}\b/.test(text)) return true;
   if (/\b(alternative|alternatives|swap|swaps|similar|safer)\b/.test(text)) return false;
@@ -7165,11 +7225,23 @@ function isNewGuideProductRequest(message) {
   return !currentName || !words.every((word) => currentName.includes(word));
 }
 
+function looksLikeGuideProductLookup(message) {
+  const text = String(message || "").trim().toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+  if (!text || /[?]/.test(String(message || ""))) return false;
+  if (/^(what|why|how|can|could|should|does|do|is|are|tell|explain|compare)\b/.test(text)) return false;
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 10) return false;
+  const followUpTerms = new Set(["ingredients", "ingredient", "score", "scores", "deodorant", "antiperspirant", "soap", "shampoo", "conditioner", "lotion", "cream", "food", "drink", "bodywash", "body", "wash"]);
+  if (words.every((word) => followUpTerms.has(word))) return false;
+  const productSignals = /\b(body\s*wash|bodywash|deodorant|antiperspirant|shampoo|conditioner|lotion|cream|soap|chips|drink|soda|snack|bar|spray|gel|stick)\b/.test(text);
+  const brandLike = words.some((word) => word.length >= 4) && words.length >= 3;
+  return productSignals || brandLike;
+}
+
 function renderGuideConversation(showThinking = false) {
   if (!els.guideMessages) return;
   const renderedGuideProducts = [];
-  const firstName = String(state.user?.name || "").trim().split(/\s+/)[0];
-  if (els.guideGreeting) els.guideGreeting.textContent = `${firstName ? `Hi ${firstName}.` : "Hi."} What can Guide help you understand?`;
+  if (els.guideGreeting) els.guideGreeting.textContent = "What do you want to check?";
   const contextProduct = state.guideProduct && (state.guideMessages.length || showThinking)
     ? normalizeRenderableAnalysis(state.guideProduct)
     : null;
@@ -7210,6 +7282,7 @@ function renderGuideConversation(showThinking = false) {
               <strong>${escapeHtml(product.name || "Product")}</strong>
               <small>${escapeHtml(product.brand || product.itemCategory || "GreenScan listing")}</small>
               <small class="guide-product-ingredients">${ingredients.length ? `Ingredients: ${escapeHtml(ingredients.join(", "))}` : "Ingredient preview unavailable"}</small>
+              ${product.dataWarning ? `<small class="guide-product-warning">${escapeHtml(product.dataWarning)}</small>` : ""}
             </span>
             ${hasScore
               ? `<span class="guide-product-score ${scoreColor(score)}" style="--score-value:${score}" aria-label="GreenScan score ${score} out of 100">${score}</span>`
@@ -7247,22 +7320,18 @@ function renderGuideConversation(showThinking = false) {
   });
   els.guideMessages.querySelectorAll("[data-guide-product]").forEach((button) => {
     button.addEventListener("click", async () => {
+      if (state.guideBusy) return;
       const barcode = button.dataset.guideProduct;
       const attachedProduct = renderedGuideProducts[Number(button.dataset.guideProductIndex)];
-      if (attachedProduct?.externalSource && barcode) {
-        closeGuide();
-        showScannerView();
-        await lookupBarcode(barcode);
-        return;
-      }
       const localProduct = barcode
         ? getSavedProduct(barcode) || getKnownLocalProducts().find((item) => String(item.barcode || "") === barcode)
         : null;
       const product = (barcode ? await getSharedSavedProduct(barcode) : null) || localProduct || attachedProduct;
       if (!product) return toast("That listing is not available right now.");
-      closeGuide();
-      showScannerView();
-      renderResult(normalizeRenderableAnalysis(product), { skipHistoryRender: true });
+      state.guideProduct = normalizeRenderableAnalysis(product);
+      els.guideInput.value = "Explain this selected product. Include its score, what matters most, and whether it fits my restrictions.";
+      renderGuideConversation();
+      await sendGuideMessage(new Event("submit"));
     });
   });
   els.guideSendButton.disabled = state.guideBusy;
@@ -7534,22 +7603,32 @@ function renderAdminSummary(data) {
   const reportHistory = data.reportHistory || [];
   renderAdminReportFilters(data.reports || [], data.imageReports || [], reportHistory);
   els.adminReportList.innerHTML = (data.reports || [])
-    .map((report) => `
-      <div class="report-card detailed-report" data-report-issue="${escapeHtml(report.issueType || "other")}">
+    .map((report) => {
+      const isAiRepair = report.reportKind === "ai_repair";
+      const reportIssue = isAiRepair ? "ai_repair" : (report.issueType || "other");
+      return `
+      <div class="report-card detailed-report ${isAiRepair ? "ai-repair-report" : ""}" data-report-issue="${escapeHtml(reportIssue)}">
         <div class="report-main">
           <div class="report-header">
             <div>
-              <p class="eyebrow">Data report - ${escapeHtml(formatReportIssueType(report.issueType))}</p>
+              <p class="eyebrow">${isAiRepair ? "AI suggested repair" : `Data report - ${escapeHtml(formatReportIssueType(report.issueType))}`}</p>
               <h3>${escapeHtml(report.name || report.barcode || "Reported product")}</h3>
-              <p>${escapeHtml(report.barcode || "")} - ${escapeHtml(report.userEmail || "Signed-in user")}</p>
+              <p>${escapeHtml(report.barcode || "")} - ${escapeHtml(isAiRepair ? (report.aiSourceLabel || "GreenScan AI") : (report.userEmail || "Signed-in user"))}</p>
             </div>
             <div class="report-meta-stack">
               <span class="report-date">${escapeHtml(formatAdminDate(report.createdAt))}</span>
               <span class="report-confidence ${Number(report.priorityScore || 0) >= 80 ? "high" : Number(report.priorityScore || 0) >= 55 ? "medium" : "low"}">${escapeHtml(report.priorityLabel || "Normal")} ${Number(report.priorityScore || 0)}/100</span>
               <span class="report-confidence ${escapeHtml(report.confidenceLevel || "medium")}">${escapeHtml(report.confidenceLabel || "Needs quick check")} ${Number(report.confidenceScore || 0)}/100</span>
+              ${isAiRepair ? `<span class="report-confidence high">AI confidence ${Number(report.aiRepairConfidence || 0)}/100</span>` : ""}
               ${Number(report.duplicateCount || 1) > 1 ? `<span class="report-duplicate">${Number(report.duplicateCount)} similar reports</span>` : ""}
             </div>
           </div>
+          ${isAiRepair && report.aiRepairReasons?.length ? `
+            <div class="ai-repair-reasons">
+              <strong>Why AI flagged this</strong>
+              <ul>${report.aiRepairReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
+            </div>
+          ` : ""}
           <div class="report-product-image ${report.imageUrl ? "" : "hidden"}">
             <img class="admin-report-preview" src="${escapeHtml(report.imageUrl || "")}" alt="Reported product image" />
             <span>Product image from this report or saved listing</span>
@@ -7601,7 +7680,8 @@ function renderAdminSummary(data) {
           <button type="button" class="secondary-button" data-report-action="decline" data-report-id="${escapeHtml(report.id)}">Decline</button>
         </div>
       </div>
-    `)
+    `;
+    })
     .join("") || "<p>No data reports waiting.</p>";
   els.adminReportList.innerHTML += reportHistory
     .map((report) => {
@@ -7905,7 +7985,8 @@ function parseAdminScore(text) {
 function renderAdminReportFilters(reports, imageReports, reportHistory = []) {
   const counts = {
     all: reports.length + imageReports.length,
-    ingredients: reports.filter((report) => report.issueType === "ingredients").length,
+    ai: reports.filter((report) => report.reportKind === "ai_repair").length,
+    ingredients: reports.filter((report) => report.reportKind !== "ai_repair" && report.issueType === "ingredients").length,
     name: reports.filter((report) => report.issueType === "product_name" || report.issueType === "productName").length,
     brand: reports.filter((report) => report.issueType === "brand").length,
     photo: reports.filter((report) => report.issueType === "photo").length + imageReports.length,
@@ -7913,6 +7994,7 @@ function renderAdminReportFilters(reports, imageReports, reportHistory = []) {
   };
   els.adminReportFilters.innerHTML = [
     ["all", "All"],
+    ["ai", "AI repairs"],
     ["ingredients", "Ingredients"],
     ["name", "Names"],
     ["brand", "Brands"],
@@ -7939,6 +8021,7 @@ function applyAdminReportFilter() {
     const show = filter === "all"
       ? issue !== "history"
       : issue === filter
+      || (filter === "ai" && issue === "ai_repair")
       || (filter === "name" && (issue === "productName" || issue === "product_name"))
       || (filter === "photo" && issue === "image");
     card.classList.toggle("hidden", !show);
