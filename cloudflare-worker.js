@@ -12,6 +12,8 @@ const MAX_IMAGE_URL_LENGTH = 3_200_000;
 const ACCOUNT_SYNC_LIMIT = 40;
 const ACCOUNT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 90;
 const ACCOUNT_SESSION_RENEW_SECONDS = 60 * 60 * 24 * 14;
+const REFERRAL_MATURE_MS = 24 * 60 * 60 * 1000;
+const REFERRAL_MAX_DAILY_BONUS = 10;
 const DEFAULT_LIMITS = {
   signedInAi: 15,
   guestAi: 5,
@@ -140,9 +142,32 @@ export default {
       if (!verifiedUser?.email) return json({ error: "Sign in with Google to register this account." }, 401, headers);
       const ban = await requireNotBanned(env, verifiedUser);
       if (!ban.ok) return json({ error: ban.error }, ban.status, headers);
-      await registerUser(env, `email:${verifiedUser.email}`, verifiedUser);
+      const referralsAllowed = isOfficialGreenScanRequest(request);
+      let body = {};
+      try {
+        body = await request.json();
+      } catch {
+        body = {};
+      }
+      const registration = await registerUser(env, `email:${verifiedUser.email}`, verifiedUser, {
+        referralCode: referralsAllowed ? body.referralCode : "",
+        request,
+      });
       const session = await createAccountSession(env, verifiedUser);
-      return json({ ok: true, email: verifiedUser.email, ...session }, 200, headers);
+      return json({ ok: true, email: verifiedUser.email, referral: registration?.referral || null, ...session }, 200, headers);
+    }
+
+    if (url.pathname === "/api/referral-status" && request.method === "GET") {
+      if (!isOfficialGreenScanRequest(request)) {
+        return json({ error: "Referrals are only available on GreenScan.us." }, 403, headers);
+      }
+      const verifiedUser = await getVerifiedUser(request, env);
+      if (!verifiedUser?.email) return json({ error: "Sign in with Google to view referrals." }, 401, headers);
+      const ban = await requireNotBanned(env, verifiedUser);
+      if (!ban.ok) return json({ error: ban.error }, ban.status, headers);
+      const identity = `email:${verifiedUser.email}`;
+      await registerUser(env, identity, verifiedUser);
+      return json(await getReferralStatus(env, identity), 200, headers);
     }
 
     if (url.pathname === "/api/account/session" && request.method === "DELETE") {
@@ -444,7 +469,10 @@ export default {
       if (!ban.ok) return json({ error: ban.error }, ban.status, headers);
       const identity = getTrustedIdentity(request, verifiedUser);
       if (barcode) await recordTrendingScan(env, barcode);
-      if (verifiedUser?.email) await updateUserStats(env, identity, verifiedUser, { scans: 1 });
+      if (verifiedUser?.email) {
+        await updateUserStats(env, identity, verifiedUser, { scans: 1 });
+        await markReferralFirstScan(env, verifiedUser);
+      }
       await incrementAdminCounters(env, { scans: 1 });
       return json({ ok: true }, 200, headers);
     }
@@ -935,6 +963,8 @@ export default {
       const userAiProvider = normalizeProvider(body.userAiProvider);
       const userAiKey = String(body.userAiKey || "").trim();
       const usingUserAi = Boolean(userAiProvider && userAiKey);
+      const userAiVerifyUnknownIngredients = body.userAiVerifyUnknownIngredients !== false;
+      const allowSharedDatabaseContribution = body.allowSharedDatabaseContribution !== false;
       if (!usingUserAi && !env.OPENAI_API_KEY) return json({ error: "AI analysis is not configured yet." }, 500, headers);
       let frontImage = cleanImageUrl(body.frontImage);
       let backImage = cleanImageUrl(body.backImage);
@@ -976,6 +1006,7 @@ export default {
             remaining: 0,
             reset_at: nextLimitResetAt(),
             signed_in: usage.signedIn,
+            referral_bonus: usage.referralBonus || 0,
           },
           429,
           headers,
@@ -1017,19 +1048,39 @@ export default {
           helper.ocrSource = ocr.engine || "helper";
           if (!helper.ocrWeak) {
             manualIngredients = String(ocr.ingredientText || ocr.text || "").trim();
-            if (productType !== "food") {
-              manualIngredients = extractIngredientSectionsOnly(manualIngredients, { preserveDrugFactsIngredients: true });
-            }
+            manualIngredients = extractIngredientSectionsOnly(manualIngredients, { preserveDrugFactsIngredients: true });
             backImage = "";
           }
         }
       }
 
+      const existingProductForPrompt = barcode ? await env.PRODUCT_CACHE.get(barcode, "json") : null;
+      const existingPromptHint = existingProductForPrompt
+        ? `Existing saved listing for this barcode, if useful for identity cross-check only: name="${existingProductForPrompt.name || existingProductForPrompt.detected_product_name || ""}", brand="${existingProductForPrompt.brand || existingProductForPrompt.detected_brand || ""}", category="${existingProductForPrompt.itemCategory || existingProductForPrompt.item_category || existingProductForPrompt.product_category || ""}". Do not copy its ingredients unless visible in the submitted label/text.`
+        : "No existing saved listing was supplied for identity cross-check.";
+      const analysisSystemPrompt = [
+        "You analyze packaged food, drink, beauty, and hair products from label photos. Return only JSON.",
+        "Accuracy is more important than filling every field. If text is unclear, use null/empty values and lower confidence instead of guessing.",
+        "Product identity rules: use the front image as the primary source for brand and product name. Do not use slogans, marketing claims, directions, flavor claims, warnings, or ingredient names as the product name. If the front image is missing/unclear, use typed barcode context or existing listing only for brand/name cross-checking. Product names must be human product names, not generic placeholders like photo analyzed product, beauty product, food product, label, ingredients, nutrition facts, or drug facts.",
+        "Ingredient extraction rules: extracted_ingredients_text must contain ingredient sections only, copied from visible label ingredient headings and ingredient text. The ingredients array must contain only ingredient names/phrases that appear in extracted_ingredients_text, except normal spelling cleanup. Do not add inferred ingredients.",
+        "For Drug Facts or OTC cosmetic labels, include only Active ingredient(s) and Inactive ingredients, preserving those section labels when visible. Exclude Purpose, Uses, Warnings, Directions, Other information, Questions, distributor/address, phone, website/social text, marketing claims, barcode/UPC numbers, certifications, recycling/storage/package text, and all other non-ingredient label copy.",
+        "For normal cosmetic/beauty/hair labels, use only text after Ingredients or Inactive ingredients and stop before warnings, directions, use instructions, address/contact, website/social, claims, recycling, storage, package, or company sections.",
+        "For food/drink, extracted_ingredients_text must contain only the Ingredients section. Nutrition Facts belongs only in nutrition_facts. Exclude standalone Contains/allergen statements unless embedded in the ingredient sentence, but preserve real ingredient phrases such as contains less than 2% of and may contain 2% or less of.",
+        "Marketing claims such as vegan, cruelty-free, paraben-free, aluminum-free, dermatologist tested, clinically proven, natural, organic, gluten-free, non-GMO, no artificial colors, and plant-based are not ingredients.",
+        "If the ingredient section is not visible or too blurry, set extracted_ingredients_text to an empty string, ingredients to an empty array, and confidence below 0.55.",
+        "Prefer per-100g nutrition values when label math is clear; otherwise use the label values and serving size. If nutrition cannot be read, set fields to null.",
+        "If the user provided Product type food or beauty, keep product_category as that type. Infer item_category as a specific product type such as Deodorant, Mouthwash, Toothpaste, Shampoo, Conditioner, Body Wash, Lotion, Sunscreen, Crackers, Chips, Cereal, Candy, Sauce, Drink, or Snack.",
+        "Classify conditioners, shampoos, hair masks, hair oils, lotions, creams, soaps, skincare, fragrance, and cosmetics as beauty. Cosmetic/INCI signals such as dimethicone, amodimethicone, behentrimonium chloride, cetrimonium chloride, polyquaternium, parfum/fragrance, phenoxyethanol, methylisothiazolinone, cetyl alcohol, stearyl alcohol, panthenol, and surfactants indicate beauty.",
+        "Score from 0-100 using GreenScan scoring: start at 100, subtract about 18 for high risk ingredients, 8 for moderate risk, 3 for unknown risk.",
+        "For food, apply extra penalties for added sugar, sugar syrups, flagged additives, added fats or oils, artificial colors, high fructose corn syrup, BHA/BHT/TBHQ, sodium nitrite/nitrate, brominated vegetable oil, Red No. 3/erythrosine, titanium dioxide/E171, potassium bromate or bromate flour improvers, propylparaben, benzoates, sulfites, azodicarbonamide, aluminum-containing additives, polysorbates, carrageenan, carboxymethylcellulose/cellulose gum, partially hydrogenated oils, artificial sweeteners, high sugar, high fat, high saturated fat, high sodium, or poor Nutri-Score-like quality.",
+        "For beauty, penalize fragrance/parfum and EU fragrance allergens, methylisothiazolinone or methylchloroisothiazolinone plus benzisothiazolinone/octylisothiazolinone, formaldehyde releasers, mercury compounds, lead acetate, hydroquinone/deoxyarbutin, borates/perborates, phthalates, lilial, triclosan/triclocarban, zinc pyrithione, toluene, methyl methacrylate, persulfates, coal tar dyes, PPD/resorcinol hair dyes, restricted parabens, UV filters with strong concern, DEA-related surfactants, talc, PFAS signals, microplastic/polymer signals, D4/D5/D6 cyclic silicones, drying alcohols, and sulfates.",
+        "When an ingredient is banned, limited, restricted, no longer authorized, or specifically warned about by US/FDA or EU sources, include that regulatory note in the ingredient reason. Score color is green for 75-100, yellow for 50-74, red for 0-49.",
+      ].join(" ");
+
       const messages = [
         {
           role: "system",
-          content:
-            "You analyze food and beauty products from images. Return only JSON. Use the front image for brand/product title. Use the back image or typed text for ingredient data. Critical extraction rule: extracted_ingredients_text must contain ingredient sections only, copied from visible label ingredient headings and ingredient text. For Drug Facts or OTC cosmetic labels, include only Active ingredient(s) and Inactive ingredients, preserving those section labels when visible. Exclude Purpose, Uses, Warnings, Directions, Other information, Questions, distributor/address, phone, website/social text, marketing claims, barcode/UPC numbers, certifications, recycling/storage/package text, and all other non-ingredient label copy from extracted_ingredients_text. For normal cosmetic/beauty/hair labels, use only text after Ingredients/Inactive ingredients and stop before warnings, directions, use instructions, address/contact, website/social, claims, recycling, storage, or package sections. For food/drink, extracted_ingredients_text must contain only the Ingredients section; Nutrition Facts belongs only in nutrition_facts. Exclude standalone Contains/allergen statements unless embedded in the ingredient sentence, but preserve real ingredient phrases such as contains less than 2% of and may contain 2% or less of. Marketing claims such as vegan, cruelty-free, paraben-free, aluminum-free, dermatologist tested, and clinically proven are not ingredients. Prefer per-100g nutrition values when label math is clear; otherwise use the label values and serving size. If nutrition cannot be read, set fields to null. If the user provided Product type food or beauty, keep product_category as that type. Also infer item_category as a specific product type such as Deodorant, Mouthwash, Toothpaste, Shampoo, Conditioner, Body Wash, Lotion, Sunscreen, Crackers, Chips, Cereal, Candy, Sauce, Drink, or Snack. Classify conditioners, shampoos, hair masks, hair oils, lotions, creams, soaps, skincare, fragrance, and cosmetics as beauty. Cosmetic/INCI signals such as dimethicone, amodimethicone, behentrimonium chloride, cetrimonium chloride, polyquaternium, parfum/fragrance, phenoxyethanol, methylisothiazolinone, cetyl alcohol, stearyl alcohol, panthenol, and surfactants indicate beauty. Score from 0-100 using GreenScan scoring: start at 100, subtract about 18 for high risk ingredients, 8 for moderate risk, 3 for unknown risk. For food, apply extra penalties for added sugar, sugar syrups, flagged additives, added fats or oils, artificial colors, high fructose corn syrup, BHA/BHT/TBHQ, sodium nitrite/nitrate, brominated vegetable oil, Red No. 3/erythrosine, titanium dioxide/E171, potassium bromate or bromate flour improvers, propylparaben, benzoates, sulfites, azodicarbonamide, aluminum-containing additives, polysorbates, carrageenan, carboxymethylcellulose/cellulose gum, partially hydrogenated oils, artificial sweeteners, high sugar, high fat, high saturated fat, high sodium, or poor Nutri-Score-like quality. Use nutrition_facts to lower food scores for high sugar, fat, saturated fat, sodium, calories, or low fiber/protein where relevant. Do not rate sugary spreads, candy, sweet drinks, or heavily processed snack foods as excellent just because they lack artificial colors. Add positive_notes for food only when the ingredient list and nutrition facts support them, such as no added sugar detected, no flagged additives detected, no added fats/oils detected, low sugar, low sodium, or meaningful protein/fiber. For beauty, penalize fragrance/parfum and EU fragrance allergens, methylisothiazolinone or methylchloroisothiazolinone plus benzisothiazolinone/octylisothiazolinone, formaldehyde releasers such as DMDM hydantoin/quaternium-15/imidazolidinyl urea/diazolidinyl urea/bronopol/sodium hydroxymethylglycinate/methenamine/benzylhemiformal/polyoxymethylene urea, mercury compounds, lead acetate, hydroquinone/deoxyarbutin, boric acid/borates/perborates, phthalates such as dibutyl phthalate/DEHP/diethyl phthalate, lilial/butylphenyl methylpropional, triclosan/triclocarban, zinc pyrithione, toluene, methyl methacrylate, persulfate hair bleaches, coal tar dyes, PPD/resorcinol hair dyes, restricted parabens, oxybenzone/homosalate/octocrylene/4-methylbenzylidene camphor, DEA-related surfactants, talc, PFAS signals such as PTFE or perfluoro ingredients, synthetic microplastic/polymer signals such as polyethylene/polypropylene/PMMA/nylon-12/acrylates copolymer, D4/D5/D6 cyclic silicones, drying alcohols, and sulfates. When an ingredient is banned, limited, restricted, no longer authorized, or specifically warned about by US/FDA or EU sources, include that regulatory note in the ingredient reason. Add small bonuses for no high-risk ingredients, shorter lists, whole-food signals, or beauty formulas without fragrance/sensitizers. Score color is green for 75-100, yellow for 50-74, red for 0-49.",
+          content: analysisSystemPrompt,
         },
         {
           role: "user",
@@ -1041,6 +1092,10 @@ export default {
                 `Barcode: ${barcode || "unknown"}.`,
                 productType === "beauty" ? "If this is a Drug Facts deodorant/antiperspirant or OTC beauty label, extract Active ingredient(s) and Inactive ingredients only; ignore Purpose, Uses, Warnings, Directions, Other information, Questions, distributor/address, phone, website/social, barcode, recycling/storage/package, and marketing text." : "",
                 "Show only real ingredient names/phrases in extracted_ingredients_text and the ingredients array. Exclude Nutrition Facts, standalone Contains/May contain allergen lines, warnings, directions, uses, purpose, other information, addresses, phone numbers, websites/social handles, marketing claims, certifications, barcodes/UPC codes, recycling/storage copy, and package-size text. Preserve ingredient phrases like contains less than 2% of and may contain 2% or less of.",
+                usingUserAi && userAiVerifyUnknownIngredients
+                  ? "The user allows extra AI verification for unusual ingredient names. If a visible ingredient appears misspelled or incomplete, correct only obvious OCR/spelling mistakes when you are confident and keep the original meaning."
+                  : "Do not perform extra ingredient-name inference beyond visible label text and normal cleanup. If an ingredient name looks uncertain, keep confidence lower instead of guessing a corrected ingredient.",
+                existingPromptHint,
                 productType === "food"
                   ? `User says Nutrition Facts are ${hasNutritionFacts === "yes" ? "included in the submitted label/text" : hasNutritionFacts === "no" ? "not included in the submitted label/text" : "not answered"}. ${hasNutritionFacts === "no" ? "Do not invent nutrition_facts; set nutrition_facts fields to null unless clearly present in typed text or image." : "Extract nutrition_facts only when visible/readable; use null for unreadable fields."}`
                   : "Nutrition Facts are not applicable for this product type.",
@@ -1048,7 +1103,7 @@ export default {
                 helper.ocrWeak ? "Helper OCR was weak or unavailable, so inspect the full back-label image directly." : "Use the provided back-label text when it is complete.",
               ].join(" "),
             },
-            ...(frontImage ? [{ type: "image_url", image_url: { url: frontImage, detail: "low" } }] : []),
+            ...(frontImage ? [{ type: "image_url", image_url: { url: frontImage, detail: "high" } }] : []),
             ...(backImage ? [{ type: "image_url", image_url: { url: backImage, detail: "high" } }] : []),
           ],
         },
@@ -1166,16 +1221,17 @@ export default {
       analysis = normalizeAnalysisIngredientTypos(analysis);
       analysis.barcode = barcode || "";
       if (productType) analysis.product_category = productType;
-      analysis.extracted_ingredients_text = extractIngredientSectionsOnly(analysis.extracted_ingredients_text || analysis.ingredientsText || "", { preserveDrugFactsIngredients: true });
-      analysis.ingredientsText = analysis.extracted_ingredients_text;
+      analysis = strengthenAiLabelAnalysis(analysis, { productType, existingProduct: existingProductForPrompt });
       analysis.nutritionFacts = productType === "food" ? normalizeAiNutritionFactsForStorage(analysis.nutrition_facts) : null;
       analysis.imageUrl = frontImage || "";
       analysis.helper = helper;
       analysis.source = helper.ocrUsed && !helper.ocrWeak ? "Helper OCR + GPT-4o-mini" : "GPT-4o-mini";
       analysis.saved_to_database = false;
+      const databaseQuality = evaluateAiDatabaseSaveQuality(analysis, { productType });
+      analysis.database_quality = databaseQuality;
 
-      if (barcode) {
-        const existingProduct = await env.PRODUCT_CACHE.get(barcode, "json");
+      if (barcode && allowSharedDatabaseContribution && databaseQuality.safeToSave) {
+        const existingProduct = existingProductForPrompt;
         let savedImageUrl = isHttpImageUrl(frontImage) ? frontImage : "";
         if (!savedImageUrl && frontImage && frontImage.startsWith("data:image/") && env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) {
           try {
@@ -1201,6 +1257,10 @@ export default {
         );
         await incrementAdminCounters(env, { savedProducts: existingProduct ? 0 : 1 });
         analysis.saved_to_database = true;
+      } else if (barcode) {
+        analysis.database_save_blocked = allowSharedDatabaseContribution
+          ? databaseQuality.reasons
+          : ["Shared database contribution is turned off for this AI provider."];
       }
 
       if (!usage.unlimited) {
@@ -1210,6 +1270,7 @@ export default {
           remaining: Math.max(0, usage.limit - usage.count - 1),
           reset_at: nextLimitResetAt(),
           signed_in: usage.signedIn,
+          referral_bonus: usage.referralBonus || 0,
         };
         await setAiUsage(env, usage.key, usage.count + 1);
       } else {
@@ -1247,6 +1308,19 @@ function isAllowedOrigin(origin, env) {
     .map((item) => item.trim())
     .filter(Boolean)
     .includes(origin);
+}
+
+function isOfficialGreenScanRequest(request) {
+  const origin = request.headers.get("Origin") || "";
+  const referer = request.headers.get("Referer") || "";
+  return [origin, referer].some((value) => {
+    try {
+      const host = new URL(value).hostname;
+      return host === "greenscan.us" || host === "www.greenscan.us";
+    } catch {
+      return false;
+    }
+  });
 }
 
 function cleanBarcode(value) {
@@ -1342,6 +1416,155 @@ function normalizeAnalysisIngredientTypos(analysis) {
   return normalized;
 }
 
+function strengthenAiLabelAnalysis(analysis, options = {}) {
+  if (!analysis || typeof analysis !== "object") return analysis;
+  const productType = options.productType || analysis.product_category || analysis.category || "";
+  const existing = options.existingProduct || {};
+  const strengthened = { ...analysis };
+  const extractedText = extractIngredientSectionsOnly(
+    strengthened.extracted_ingredients_text || strengthened.ingredientsText || "",
+    { preserveDrugFactsIngredients: true },
+  );
+  strengthened.extracted_ingredients_text = extractedText;
+  strengthened.ingredientsText = extractedText;
+  if (productType) strengthened.product_category = productType;
+
+  const currentName = cleanProductIdentityText(strengthened.detected_product_name || strengthened.name || "");
+  const currentBrand = cleanProductIdentityText(strengthened.detected_brand || strengthened.brand || "");
+  const existingName = cleanProductIdentityText(existing.name || existing.detected_product_name || "");
+  const existingBrand = cleanProductIdentityText(existing.brand || existing.detected_brand || "");
+
+  if (isWeakProductIdentity(currentName) && existingName) {
+    strengthened.detected_product_name = existingName;
+    strengthened.name = existingName;
+  } else {
+    strengthened.detected_product_name = currentName || null;
+    strengthened.name = currentName || strengthened.name || null;
+  }
+
+  if (isWeakBrandIdentity(currentBrand) && existingBrand) {
+    strengthened.detected_brand = existingBrand;
+    strengthened.brand = existingBrand;
+  } else {
+    strengthened.detected_brand = currentBrand || null;
+    strengthened.brand = currentBrand || strengthened.brand || null;
+  }
+
+  const normalizedText = normalizeIngredientEvidenceText(extractedText);
+  strengthened.ingredients = Array.isArray(strengthened.ingredients)
+    ? strengthened.ingredients
+      .map((ingredient) => cleanAiIngredientObject(ingredient))
+      .filter((ingredient) => isReliableAiIngredient(ingredient, normalizedText))
+      .slice(0, 120)
+    : [];
+
+  if (!extractedText) strengthened.ingredients = [];
+  return strengthened;
+}
+
+function cleanProductIdentityText(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s:.,;-]+|[\s:.,;-]+$/g, "")
+    .slice(0, 160)
+    .trim();
+}
+
+function isWeakProductIdentity(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return true;
+  if (/^(?:photo analyzed product|food product|beauty product|product|label|ingredients?|ingredient list|nutrition facts|drug facts|unknown|n\/a|null)$/i.test(text)) return true;
+  if (new RegExp(NON_INGREDIENT_SECTION_STOP, "i").test(text)) return true;
+  if (/\b(?:directions?|warnings?|uses?|purpose|active ingredients?|inactive ingredients?|distributed by|manufactured by|scan|barcode|upc)\b/i.test(text)) return true;
+  return false;
+}
+
+function isWeakBrandIdentity(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return true;
+  if (/^(?:brand|unknown|n\/a|null|product|label)$/i.test(text)) return true;
+  if (new RegExp(NON_INGREDIENT_SECTION_STOP, "i").test(text)) return true;
+  return false;
+}
+
+function cleanAiIngredientObject(ingredient) {
+  if (!ingredient || typeof ingredient !== "object") return null;
+  const rawName = cleanIngredientName(normalizeIngredientTextTypos(ingredient.raw_name || ingredient.rawName || ""));
+  if (!rawName) return null;
+  return {
+    ...ingredient,
+    raw_name: rawName,
+    rawName: Object.prototype.hasOwnProperty.call(ingredient, "rawName") ? rawName : ingredient.rawName,
+    normalized_name: normalizeIngredientTextTypos(ingredient.normalized_name || ingredient.normalizedName || rawName).toLowerCase(),
+    normalizedName: Object.prototype.hasOwnProperty.call(ingredient, "normalizedName")
+      ? normalizeIngredientTextTypos(ingredient.normalizedName || ingredient.normalized_name || rawName).toLowerCase()
+      : ingredient.normalizedName,
+  };
+}
+
+function normalizeIngredientEvidenceText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9%]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isReliableAiIngredient(ingredient, normalizedExtractedText) {
+  if (!ingredient || typeof ingredient !== "object") return false;
+  const rawName = String(ingredient.raw_name || ingredient.rawName || "").trim();
+  if (isNonIngredientLabelFragment(rawName)) return false;
+  if (rawName.length > 96) return false;
+  if (/\b(?:directions?|warnings?|uses?|purpose|questions?|distributed|manufactured|website|barcode|nutrition facts|supplement facts)\b/i.test(rawName)) return false;
+  const normalizedName = normalizeIngredientEvidenceText(rawName);
+  if (!normalizedName || normalizedName.length < 2) return false;
+  if (!normalizedExtractedText) return false;
+  if (normalizedName.length <= 3) return normalizedExtractedText.split(" ").includes(normalizedName);
+  return normalizedExtractedText.includes(normalizedName);
+}
+
+function evaluateAiDatabaseSaveQuality(analysis, options = {}) {
+  const reasons = [];
+  const text = String(analysis.extracted_ingredients_text || analysis.ingredientsText || "").trim();
+  const ingredients = Array.isArray(analysis.ingredients) ? analysis.ingredients : [];
+  const confidence = Number(analysis.confidence);
+  const productName = cleanProductIdentityText(analysis.detected_product_name || analysis.name || "");
+  const productType = options.productType || analysis.product_category || analysis.category || "";
+
+  if (!text || text.length < 12) reasons.push("Ingredient section was missing or too short.");
+  if (!ingredients.length) reasons.push("No reliable ingredient names were extracted.");
+  if (ingredients.length && text && ingredients.length < Math.min(3, splitLooseIngredientCount(text))) reasons.push("Ingredient array looked incomplete compared with label text.");
+  if (isWeakProductIdentity(productName)) reasons.push("Product name was missing, generic, or looked like label copy.");
+  if (Number.isFinite(confidence) && confidence < 0.58) reasons.push("AI confidence was too low.");
+  if (hasNoisyIngredientSectionText(text)) reasons.push("Ingredient text still contained non-ingredient label sections.");
+  if (productType === "food" && /\b(?:drug facts|active ingredients?|inactive ingredients?|for external use)\b/i.test(text)) reasons.push("Food product had Drug Facts-style ingredient text.");
+  if (productType === "beauty" && /\b(?:nutrition facts|serving size|calories|% daily value)\b/i.test(text)) reasons.push("Beauty product had Nutrition Facts text.");
+
+  return {
+    safeToSave: reasons.length === 0,
+    reasons,
+    confidence: Number.isFinite(confidence) ? confidence : null,
+    ingredientCount: ingredients.length,
+  };
+}
+
+function splitLooseIngredientCount(value) {
+  return String(value || "")
+    .replace(/^(?:active ingredients?|inactive ingredients?|ingredients?)\s*:?\s*/i, "")
+    .split(/[,;]\s+|\s{2,}/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 1 && !isNonIngredientLabelFragment(item))
+    .length;
+}
+
+function hasNoisyIngredientSectionText(value) {
+  const text = String(value || "");
+  if (!text) return false;
+  if (new RegExp(NON_INGREDIENT_SECTION_STOP, "i").test(text)) return true;
+  if (/\b(?:directions?|warnings?|uses?|purpose|questions?|distributed by|manufactured by|nutrition facts|supplement facts|serving size|calories|barcode|upc|www\.|https?:\/\/|\.com\b)\b/i.test(text)) return true;
+  return false;
+}
+
 function cleanIngredientName(value) {
   return String(value || "")
     .replace(/^\s*(?:active ingredients?|inactive ingredients?|ingredients?)\s*:?\s*/i, "")
@@ -1376,7 +1599,7 @@ async function runOpenAiAnalysis(apiKey, messages, schema) {
     body: JSON.stringify({
       model: "gpt-4o-mini",
       messages,
-      temperature: 0.1,
+      temperature: 0,
       response_format: { type: "json_schema", json_schema: schema },
     }),
   });
@@ -2013,18 +2236,27 @@ function base64UrlToBytes(value) {
 }
 
 async function registerUser(env, identity, verifiedUser, fallback = {}) {
-  if (!identity || identity.startsWith("guest:")) return;
+  if (!identity || identity.startsWith("guest:")) return null;
   const email = verifiedUser?.email || normalizeEmail(fallback.userEmail);
   const name = verifiedUser?.name || email || String(fallback.userId || identity);
   const key = `user:${identity}`;
+  const existing = await env.PRODUCT_CACHE.get(key, "json");
+  const referralCode = existing?.referralCode || await createReferralCode(env, identity);
+  const referralResult = await maybeAttachReferral(env, {
+    referralCode: fallback.referralCode,
+    refereeIdentity: identity,
+    refereeEmail: email,
+    request: fallback.request,
+    existingUser: existing,
+  });
   const user = {
     identity,
     email,
     name,
     picture: verifiedUser?.picture || "",
+    referralCode,
     lastSeenAt: new Date().toISOString(),
   };
-  const existing = await env.PRODUCT_CACHE.get(key, "json");
   const emailKey = normalizeEmail(email);
   const flags = { ...(existing?.flags || {}), admin: emailKey === OWNER_ADMIN_EMAIL || Boolean(await env.PRODUCT_CACHE.get(`admin:${emailKey}`, "json")), unlimited: emailKey === OWNER_ADMIN_EMAIL || Boolean(await env.PRODUCT_CACHE.get(`unlimited:email:${emailKey}`, "json")), banned: emailKey !== OWNER_ADMIN_EMAIL && Boolean(await env.PRODUCT_CACHE.get(`banned:${emailKey}`, "json")) };
   await env.PRODUCT_CACHE.put(
@@ -2042,6 +2274,11 @@ async function registerUser(env, identity, verifiedUser, fallback = {}) {
   if (!existing) {
     await incrementAdminCounters(env, { users: 1 });
   }
+  return {
+    referral: await getReferralStatus(env, identity),
+    referralApplied: referralResult.applied,
+    referralReason: referralResult.reason,
+  };
 }
 
 async function addUserIndexItem(env, identity) {
@@ -2051,6 +2288,136 @@ async function addUserIndexItem(env, identity) {
   const list = Array.isArray(current) ? current : [];
   if (!list.includes(value)) await env.PRODUCT_CACHE.put("users:index", JSON.stringify([value, ...list]));
   await addQueueItem(env, "user-index", value);
+}
+
+function normalizeReferralCode(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
+}
+
+async function createReferralCode(env, identity) {
+  const base = await shortHash(`referral:${identity}`);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const code = attempt ? `${base}-${attempt}` : base;
+    const existing = await env.PRODUCT_CACHE.get(`referral-code:${code}`, "json");
+    if (!existing || existing.identity === identity) {
+      await env.PRODUCT_CACHE.put(`referral-code:${code}`, JSON.stringify({
+        code,
+        identity,
+        createdAt: new Date().toISOString(),
+      }));
+      return code;
+    }
+  }
+  const fallback = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+  await env.PRODUCT_CACHE.put(`referral-code:${fallback}`, JSON.stringify({
+    code: fallback,
+    identity,
+    createdAt: new Date().toISOString(),
+  }));
+  return fallback;
+}
+
+async function maybeAttachReferral(env, options = {}) {
+  const code = normalizeReferralCode(options.referralCode);
+  const refereeIdentity = String(options.refereeIdentity || "");
+  const refereeEmail = normalizeEmail(options.refereeEmail);
+  if (!code || !refereeIdentity || !refereeEmail) return { applied: false, reason: "missing_referral" };
+  const referralKey = `referral-referee:${refereeEmail}`;
+  const existingReferral = await env.PRODUCT_CACHE.get(referralKey, "json");
+  if (existingReferral?.referrerIdentity) return { applied: false, reason: "already_referred" };
+  const codeRecord = await env.PRODUCT_CACHE.get(`referral-code:${code}`, "json");
+  const referrerIdentity = String(codeRecord?.identity || "");
+  if (!referrerIdentity) return { applied: false, reason: "invalid_referral" };
+  if (referrerIdentity === refereeIdentity) return { applied: false, reason: "self_referral" };
+  const referrerEmail = referrerIdentity.startsWith("email:") ? normalizeEmail(referrerIdentity.replace(/^email:/, "")) : "";
+  if (referrerEmail && referrerEmail === refereeEmail) return { applied: false, reason: "self_referral" };
+  if (options.existingUser) return { applied: false, reason: "existing_account" };
+  const now = new Date().toISOString();
+  const record = {
+    id: `${Date.now().toString(36)}-${await shortHash(`${referrerIdentity}:${refereeIdentity}:${now}`)}`,
+    code,
+    referrerIdentity,
+    referrerEmail,
+    refereeIdentity,
+    refereeEmail,
+    createdAt: now,
+    firstScanAt: "",
+    status: "pending",
+    signupIpHash: await hashIp(options.request),
+  };
+  await env.PRODUCT_CACHE.put(referralKey, JSON.stringify(record));
+  await env.PRODUCT_CACHE.put(`referral:${record.id}`, JSON.stringify(record));
+  await addQueueItem(env, `referrals:${safeIdentityKey(referrerIdentity)}`, record.id);
+  return { applied: true, reason: "pending" };
+}
+
+async function markReferralFirstScan(env, verifiedUser) {
+  const email = normalizeEmail(verifiedUser?.email);
+  if (!email) return;
+  const key = `referral-referee:${email}`;
+  const referral = await env.PRODUCT_CACHE.get(key, "json");
+  if (!referral || referral.firstScanAt || referral.status === "blocked") return;
+  const updated = {
+    ...referral,
+    firstScanAt: new Date().toISOString(),
+    status: "scan_completed",
+  };
+  await env.PRODUCT_CACHE.put(key, JSON.stringify(updated));
+  await env.PRODUCT_CACHE.put(`referral:${updated.id}`, JSON.stringify(updated));
+}
+
+async function getReferralStatus(env, identity) {
+  const user = await env.PRODUCT_CACHE.get(`user:${identity}`, "json");
+  const code = user?.referralCode || await createReferralCode(env, identity);
+  const ids = await getQueue(env, `referrals:${safeIdentityKey(identity)}`);
+  let approvedBonus = 0;
+  let pending = 0;
+  let scannedWaiting = 0;
+  let blocked = 0;
+  const now = Date.now();
+  for (const id of ids.slice(0, 120)) {
+    const referral = await env.PRODUCT_CACHE.get(`referral:${id}`, "json");
+    if (!referral || referral.status === "blocked") {
+      if (referral?.status === "blocked") blocked += 1;
+      continue;
+    }
+    const createdAt = Date.parse(referral.createdAt || "");
+    const mature = Number.isFinite(createdAt) && now - createdAt >= REFERRAL_MATURE_MS;
+    if (referral.firstScanAt && mature) approvedBonus += 1;
+    else if (referral.firstScanAt) scannedWaiting += 1;
+    else pending += 1;
+  }
+  approvedBonus = Math.min(REFERRAL_MAX_DAILY_BONUS, approvedBonus);
+  return {
+    code,
+    referralLink: `https://greenscan.us/?ref=${encodeURIComponent(code)}`,
+    approvedBonus,
+    pending,
+    scannedWaiting,
+    blocked,
+    maxBonus: REFERRAL_MAX_DAILY_BONUS,
+    waitHours: 24,
+  };
+}
+
+async function getReferralAiBonus(env, identity) {
+  if (!identity || !identity.startsWith("email:")) return 0;
+  const status = await getReferralStatus(env, identity);
+  return Math.max(0, Math.min(REFERRAL_MAX_DAILY_BONUS, Number(status.approvedBonus || 0)));
+}
+
+function safeIdentityKey(identity) {
+  return String(identity || "").replace(/[^a-z0-9:@._-]/gi, "_").slice(0, 180);
+}
+
+async function shortHash(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
+  return Array.from(new Uint8Array(digest.slice(0, 6)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashIp(request) {
+  const ip = request?.headers?.get("CF-Connecting-IP") || request?.headers?.get("X-Forwarded-For") || "";
+  return ip ? shortHash(`ip:${ip}`) : "";
 }
 
 function defaultUserStats() {
@@ -3283,10 +3650,12 @@ async function getAiUsage(env, identity) {
   const key = `ai-usage:${today}:${identity}`;
   const signedIn = identity.startsWith("email:") || identity.startsWith("user:");
   const limits = await getAppLimits(env);
-  const limit = signedIn ? limits.signedInAi : limits.guestAi;
-  if (identity === owner || await hasUnlimitedAccess(env, identity)) return { key, count: 0, unlimited: true, limit, signedIn: true };
+  const baseLimit = signedIn ? limits.signedInAi : limits.guestAi;
+  const referralBonus = signedIn ? await getReferralAiBonus(env, identity) : 0;
+  const limit = baseLimit + referralBonus;
+  if (identity === owner || await hasUnlimitedAccess(env, identity)) return { key, count: 0, unlimited: true, limit, signedIn: true, referralBonus };
   const count = Number(await env.PRODUCT_CACHE.get(key)) || 0;
-  return { key, count, unlimited: false, limit, signedIn };
+  return { key, count, unlimited: false, limit, signedIn, referralBonus };
 }
 
 async function setAiUsage(env, key, count) {

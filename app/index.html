@@ -357,16 +357,16 @@
               </span>
               <div>
                 <p>GreenScan release</p>
-                <h3 id="landingReleaseTitle">Version 1.0.0</h3>
+                <h3 id="landingReleaseTitle">Version 1.0.2</h3>
               </div>
             </div>
             <div class="landing-release-update">
               <span>Latest update</span>
-              <strong>Verified ingredient matching and a smoother mobile experience.</strong>
+              <strong>Referrals, API-key privacy controls, stronger label reading, and cleaner mobile/settings polish.</strong>
             </div>
             <div class="landing-service-status" id="landingServiceStatus" role="status" aria-live="polite">
               <span class="landing-service-dot checking" aria-hidden="true"></span>
-              <div><strong>Checking GreenScan services…</strong><span>Local OCR helper excluded</span></div>
+              <div><strong>Checking GreenScan services...</strong><span>Local OCR helper excluded</span></div>
             </div>
           </section>
           <section class="landing-features" aria-labelledby="landingFeaturesTitle">
@@ -470,6 +470,7 @@
           <div>
             <p class="eyebrow" id="searchEyebrow">Product search</p>
             <h2 id="searchTitle">Search products</h2>
+            <p class="search-subtitle">Find products, compare ingredients, and check safety details without scanning.</p>
           </div>
         </div>
         <div class="search-mode-toggle" role="tablist" aria-label="Search type">
@@ -552,12 +553,51 @@
             Sign in with Google
           </button>
           <button type="button" class="secondary-button full hidden" id="logoutButton">Log out</button>
+          <div class="referral-card hidden" id="referralCard">
+            <div>
+              <p class="eyebrow">Referrals</p>
+              <h3>Give a friend + help GreenScan grow</h3>
+              <p id="referralStatusText">Share your link. Each approved referral adds +1 AI scan per day after 24 hours and one real scan.</p>
+            </div>
+            <label class="referral-link-label" for="referralLinkInput">
+              Your referral link
+              <input id="referralLinkInput" type="text" readonly value="" />
+            </label>
+            <button type="button" class="secondary-button full" id="copyReferralLinkButton">Copy referral link</button>
+          </div>
         </section>
-        <button type="button" class="secondary-button full" id="aiProviderButton">AI Provider</button>
-        <button type="button" class="secondary-button full" id="restrictionsButton">Restrictions</button>
-        <button type="button" class="secondary-button full" id="sourcesButton">Sources</button>
-        <button type="button" class="secondary-button full" id="changelogButton">Changelog</button>
-        <button type="button" class="secondary-button full hidden" id="adminPanelButton">Admin Panel</button>
+        <div class="settings-menu" aria-label="Settings options">
+          <button type="button" class="secondary-button full settings-action" id="aiProviderButton">
+            <span class="settings-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 2v4" /><path d="M12 18v4" /><path d="M4.93 4.93 7.76 7.76" /><path d="m16.24 16.24 2.83 2.83" /><path d="M2 12h4" /><path d="M18 12h4" /><path d="m4.93 19.07 2.83-2.83" /><path d="m16.24 7.76 2.83-2.83" /></svg>
+            </span>
+            <span><strong>AI Provider</strong><small>Use GreenScan AI or your own key.</small></span>
+          </button>
+          <button type="button" class="secondary-button full settings-action" id="restrictionsButton">
+            <span class="settings-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 20 7v6c0 5-3.5 7.5-8 8-4.5-.5-8-3-8-8V7z" /><path d="m9 12 2 2 4-5" /></svg>
+            </span>
+            <span><strong>Restrictions</strong><small>Manage allergies and avoid lists.</small></span>
+          </button>
+          <button type="button" class="secondary-button full settings-action" id="sourcesButton">
+            <span class="settings-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-1.5Z" /><path d="M8 7h7" /><path d="M8 11h7" /></svg>
+            </span>
+            <span><strong>Sources</strong><small>See data sources and scoring notes.</small></span>
+          </button>
+          <button type="button" class="secondary-button full settings-action" id="changelogButton">
+            <span class="settings-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 5h16" /><path d="M4 12h16" /><path d="M4 19h10" /></svg>
+            </span>
+            <span><strong>Changelog</strong><small>Review recent GreenScan updates.</small></span>
+          </button>
+          <button type="button" class="secondary-button full settings-action hidden" id="adminPanelButton">
+            <span class="settings-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" /><path d="M4 21a8 8 0 0 1 16 0" /><path d="M18 3v4" /><path d="M20 5h-4" /></svg>
+            </span>
+            <span><strong>Admin Panel</strong><small>Manage users, reports, and product fixes.</small></span>
+          </button>
+        </div>
       </form>
     </dialog>
 
@@ -694,9 +734,13 @@
     </dialog>
 
     <dialog id="notificationDialog">
-      <form method="dialog" class="settings-form">
+      <form method="dialog" class="settings-form notification-form">
         <div class="section-heading">
-          <h2>Notifications</h2>
+          <div>
+            <p class="eyebrow">Updates</p>
+            <h2>Notifications</h2>
+          </div>
+          <button type="button" class="ghost-button notification-clear-top" id="clearNotificationsTopButton">Clear</button>
           <button class="icon-button" value="close" aria-label="Close notifications" title="Close">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
           </button>
@@ -826,6 +870,22 @@
           API key
           <input id="userAiKey" type="password" autocomplete="off" placeholder="Paste your API key" />
         </label>
+        <div class="ai-provider-options hidden" id="aiProviderAdvancedOptions" aria-label="AI provider options">
+          <label class="settings-toggle-row">
+            <input id="verifyUnknownIngredientsToggle" type="checkbox" />
+            <span>
+              <strong>Verify unusual ingredient names</strong>
+              <small>When you use your own API key, GreenScan can double-check names that look misspelled or incomplete before rating them.</small>
+            </span>
+          </label>
+          <label class="settings-toggle-row">
+            <input id="contributeToDatabaseToggle" type="checkbox" />
+            <span>
+              <strong>Help improve GreenScan's database</strong>
+              <small>Allow verified product scans to help improve the shared database. We would gladly appreciate if you kept this on, as it helps GreenScan's mission.</small>
+            </span>
+          </label>
+        </div>
         <button type="button" class="primary-button full" id="saveAiProviderButton">Save AI provider</button>
         <button type="button" class="secondary-button full" id="clearAiProviderButton">Use GreenScan AI</button>
       </form>
@@ -844,7 +904,18 @@
         </div>
         <div class="changelog-list">
           <article class="source-card changelog-entry">
-            <p class="eyebrow">August 2026</p>
+            <p class="eyebrow">Version 1.0.2</p>
+            <h3>Referral rewards and AI controls</h3>
+            <ul>
+              <li>Added referral links for signed-in GreenScan.us users with +1 daily AI scan per approved referral.</li>
+              <li>Protected referrals with a 24-hour wait, one real scan requirement, self-referral blocking, and a +10/day bonus cap.</li>
+              <li>Added AI Provider controls for unusual ingredient verification and shared database contribution when using your own API key.</li>
+              <li>Strengthened AI label reading so Nutrition Facts, warnings, directions, and marketing copy are kept out of ingredient text.</li>
+              <li>Improved settings, notifications, search, scanner spacing, and refreshed history/favorite scores from saved listings.</li>
+            </ul>
+          </article>
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">Version 1.0.1</p>
             <h3>New Home and For You experience</h3>
             <ul>
               <li>Added the new GreenScan landing page with a clear Scan now flow.</li>

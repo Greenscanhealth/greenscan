@@ -123,12 +123,17 @@ const els = {
   notificationDialog: document.querySelector("#notificationDialog"),
   notificationList: document.querySelector("#notificationList"),
   clearNotificationsButton: document.querySelector("#clearNotificationsButton"),
+  clearNotificationsTopButton: document.querySelector("#clearNotificationsTopButton"),
   adminMenuButton: document.querySelector("#adminMenuButton"),
   settingsButton: document.querySelector("#settingsButton"),
   themeToggleButton: document.querySelector("#themeToggleButton"),
   settingsDialog: document.querySelector("#settingsDialog"),
   accountTitle: document.querySelector("#accountTitle"),
   accountNote: document.querySelector("#accountNote"),
+  referralCard: document.querySelector("#referralCard"),
+  referralStatusText: document.querySelector("#referralStatusText"),
+  referralLinkInput: document.querySelector("#referralLinkInput"),
+  copyReferralLinkButton: document.querySelector("#copyReferralLinkButton"),
   googleLoginButton: document.querySelector("#googleLoginButton"),
   aiProviderButton: document.querySelector("#aiProviderButton"),
   restrictionsButton: document.querySelector("#restrictionsButton"),
@@ -142,6 +147,9 @@ const els = {
   aiProviderDialog: document.querySelector("#aiProviderDialog"),
   aiProviderSelect: document.querySelector("#aiProviderSelect"),
   userAiKey: document.querySelector("#userAiKey"),
+  aiProviderAdvancedOptions: document.querySelector("#aiProviderAdvancedOptions"),
+  verifyUnknownIngredientsToggle: document.querySelector("#verifyUnknownIngredientsToggle"),
+  contributeToDatabaseToggle: document.querySelector("#contributeToDatabaseToggle"),
   saveAiProviderButton: document.querySelector("#saveAiProviderButton"),
   clearAiProviderButton: document.querySelector("#clearAiProviderButton"),
   sourcesButton: document.querySelector("#sourcesButton"),
@@ -231,6 +239,7 @@ const accountSessionStorageKey = "greenscan.accountSession.v1";
 const accountRegistrationStorageKey = "greenscan.accountRegistered.v1";
 const googleNonceStorageKey = "greenscan.googleNonce.v1";
 const pendingAnalysisStorageKey = "greenscan.pendingAnalysis.v1";
+const referralStorageKey = "greenscan.pendingReferral.v1";
 
 const localCachePolicy = {
   historyLimit: 10,
@@ -792,6 +801,7 @@ els.notificationButton.addEventListener("click", () => {
   openNotifications();
 });
 els.clearNotificationsButton.addEventListener("click", clearNotifications);
+els.clearNotificationsTopButton?.addEventListener("click", clearNotifications);
 els.ingredientSpeakButton?.addEventListener("click", speakActiveIngredient);
 els.ingredientDialog?.addEventListener("close", () => {
   els.ingredientDialog.classList.remove("dialog-fallback-open");
@@ -838,6 +848,8 @@ els.restrictionsButton.addEventListener("click", openRestrictions);
 els.saveAvoidListButton.addEventListener("click", saveAvoidListFromSettings);
 els.saveAiProviderButton.addEventListener("click", saveAiProvider);
 els.clearAiProviderButton.addEventListener("click", clearAiProvider);
+els.userAiKey?.addEventListener("input", updateAiProviderAdvancedVisibility);
+els.copyReferralLinkButton?.addEventListener("click", copyReferralLink);
 els.logoutButton.addEventListener("click", logout);
 els.sourcesButton.addEventListener("click", openSources);
 els.changelogButton.addEventListener("click", openChangelog);
@@ -893,6 +905,7 @@ initDesktopNavigation();
 initBottomNavViewportLock();
 initTheme();
 initCameraHint();
+captureReferralCode();
 initAuth();
 renderHistory();
 renderRecentSearches();
@@ -2121,21 +2134,36 @@ function addLimitNotification({ kind, remaining, resetAt }) {
 function openNotifications() {
   const notifications = getNotifications();
   els.notificationList.innerHTML = notifications.length
-    ? notifications.map((item) => `
+    ? notifications.map((item) => {
+      const icon = getNotificationIcon(item);
+      return `
       <article class="notification-item${item.read ? "" : " unread"}">
-        <strong>${escapeHtml(item.title)}</strong>
-        <p>${escapeHtml(item.message)}</p>
-        <span>${escapeHtml(formatAdminDate(item.createdAt))}</span>
+        <span class="notification-item-icon ${escapeHtml(icon.tone)}" aria-hidden="true">${escapeHtml(icon.label)}</span>
+        <div>
+          <strong>${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.message)}</p>
+          <time datetime="${escapeHtml(item.createdAt || "")}">${escapeHtml(formatAdminDate(item.createdAt))}</time>
+        </div>
       </article>
-    `).join("")
-    : `<p class="ingredient-empty">No notifications yet.</p>`;
+    `;
+    }).join("")
+    : `<div class="notification-empty"><strong>No notifications yet</strong><span>Important product updates and limit reminders will appear here.</span></div>`;
   saveNotifications(notifications.map((item) => ({ ...item, read: true })));
   els.notificationDialog.showModal();
 }
 
+function getNotificationIcon(item = {}) {
+  const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
+  if (text.includes("limit")) return { label: "!", tone: "warn" };
+  if (text.includes("updated") || text.includes("change")) return { label: "U", tone: "update" };
+  if (text.includes("score") || text.includes("analysis")) return { label: "i", tone: "info" };
+  return { label: "N", tone: "default" };
+}
+
 function clearNotifications() {
   saveNotifications([]);
-  els.notificationList.innerHTML = `<p class="ingredient-empty">No notifications yet.</p>`;
+  els.notificationList.innerHTML = `<div class="notification-empty"><strong>No notifications yet</strong><span>Important product updates and limit reminders will appear here.</span></div>`;
+  updateNotificationDot();
 }
 
 function updateNotificationDot() {
@@ -3709,6 +3737,7 @@ function renderFavoritesPanel() {
     });
   });
   bindSwapButtons(swaps);
+  hydrateFavoriteSnapshots(favorites);
 }
 
 function getSaferSwapsReport() {
@@ -5078,6 +5107,8 @@ async function analyzeWithEdgeFunction() {
     userId: state.user?.id || "",
     userAiProvider: state.user ? state.userAiSettings.provider : "",
     userAiKey: state.user ? state.userAiSettings.apiKey : "",
+    userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
+    allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false,
     hasNutritionFacts: state.selectedProductType === "food" ? state.labelHasNutritionFacts : "not_applicable",
     frontImage,
     backImage,
@@ -5127,6 +5158,8 @@ async function buildCurrentAnalysisPayload() {
     userId: state.user?.id || "",
     userAiProvider: state.user ? state.userAiSettings.provider : "",
     userAiKey: state.user ? state.userAiSettings.apiKey : "",
+    userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
+    allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false,
     hasNutritionFacts: state.selectedProductType === "food" ? state.labelHasNutritionFacts : "not_applicable",
     frontImage,
     backImage,
@@ -5229,6 +5262,8 @@ async function syncPendingAnalyses() {
           userId: state.user?.id || item.payload.userId || "",
           userAiProvider: state.user ? state.userAiSettings.provider : item.payload.userAiProvider || "",
           userAiKey: state.user ? state.userAiSettings.apiKey : "",
+          userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
+          allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false && item.payload.allowSharedDatabaseContribution !== false,
         };
         const response = await fetch(getAnalysisEndpoint(), {
           method: "POST",
@@ -5876,15 +5911,20 @@ async function registerAccountSession() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${state.user.idToken}`,
       },
-      body: JSON.stringify({ source: isHomeScreenApp() ? "installed-web-app" : "web" }),
+      body: JSON.stringify({
+        source: isHomeScreenApp() ? "installed-web-app" : "web",
+        referralCode: getPendingReferralCode(),
+      }),
     });
     if (!response.ok) return;
     const data = await response.json();
+    clearPendingReferralCode();
     markAccountRegisteredToday();
     if (data.sessionToken) {
       saveAccountSession(data.sessionToken, data.sessionExpiresAt);
       requestPersistentAppStorage();
     }
+    if (data.referral) renderReferralStatus(data.referral);
   } catch {
     // Account registration is best effort; the current Google token still works.
   }
@@ -6182,22 +6222,58 @@ function renderFriendlySaferSwaps() {
   els.friendlySwapsCard.querySelector("[data-friendly-search]")?.addEventListener("click", openSearchView);
 }
 
+function mergeFreshProductSnapshot(existing, shared, options = {}) {
+  if (!existing?.barcode || !shared) return existing;
+  const merged = mergeLocalProductOverrides(shared, existing);
+  if (!merged) return existing;
+  return compactHistoryAnalysis({
+    ...merged,
+    createdAt: options.preserveCreatedAt ? existing.createdAt || merged.createdAt : merged.createdAt || existing.createdAt,
+    imageUrl: merged.imageUrl || existing.imageUrl,
+  }, { stripDataImage: shouldStripInlineImage(merged.imageUrl || existing.imageUrl, options.index || 0, localCachePolicy.keepHistoryImages) });
+}
+
+function hasProductSnapshotChanged(previous, next) {
+  if (!previous || !next) return false;
+  const keys = [
+    "name",
+    "brand",
+    "category",
+    "itemCategory",
+    "imageUrl",
+    "ingredientsText",
+    "safetyScore",
+    "scoreColor",
+    "summary",
+  ];
+  if (keys.some((key) => String(previous[key] ?? "") !== String(next[key] ?? ""))) return true;
+  if (productIngredientSignature(previous) !== productIngredientSignature(next)) return true;
+  return false;
+}
+
 async function hydrateMissingHistoryImages(history = getHistory()) {
   if (state.hydratingHistoryImages) return;
-  const missing = history.filter((item) => item?.barcode && !item.imageUrl).slice(0, localCachePolicy.historyLimit);
-  if (!missing.length) return;
+  const hydratable = history.filter((item) => item?.barcode).slice(0, localCachePolicy.historyLimit);
+  if (!hydratable.length) return;
   state.hydratingHistoryImages = true;
   try {
     let changed = false;
     const next = [...history];
-    for (const item of missing) {
-      let imageUrl = "";
+    for (const item of hydratable) {
       const shared = await getSharedSavedProduct(item.barcode);
-      if (shared?.imageUrl) imageUrl = shared.imageUrl;
-      if (!imageUrl) imageUrl = await findOpenDatabaseImageUrl(item.barcode);
-      if (!imageUrl) continue;
       const index = next.findIndex((entry) => getHistoryKey(entry) === getHistoryKey(item));
-      if (index >= 0 && !next[index].imageUrl) {
+      if (index < 0) continue;
+      if (shared) {
+        const refreshed = mergeFreshProductSnapshot(next[index], shared, { preserveCreatedAt: true, index });
+        if (hasProductSnapshotChanged(next[index], refreshed)) {
+          next[index] = refreshed;
+          changed = true;
+        }
+        continue;
+      }
+      if (!next[index].imageUrl) {
+        const imageUrl = await findOpenDatabaseImageUrl(item.barcode);
+        if (!imageUrl) continue;
         next[index] = { ...next[index], imageUrl };
         changed = true;
       }
@@ -6212,6 +6288,38 @@ async function hydrateMissingHistoryImages(history = getHistory()) {
     // History remains usable with placeholders if image hydration fails.
   } finally {
     state.hydratingHistoryImages = false;
+  }
+}
+
+async function hydrateFavoriteSnapshots(favorites = getFavoriteProducts()) {
+  if (state.hydratingFavoriteSnapshots) return;
+  const hydratable = favorites.filter((item) => item?.barcode).slice(0, localCachePolicy.favoriteLimit);
+  if (!hydratable.length) return;
+  state.hydratingFavoriteSnapshots = true;
+  try {
+    let changed = false;
+    const next = [...favorites];
+    for (const item of hydratable) {
+      const shared = await getSharedSavedProduct(item.barcode);
+      if (!shared) continue;
+      const index = next.findIndex((entry) => entry.barcode === item.barcode);
+      if (index < 0) continue;
+      const refreshed = mergeFreshProductSnapshot(next[index], shared, { preserveCreatedAt: false, index });
+      if (hasProductSnapshotChanged(next[index], refreshed)) {
+        next[index] = refreshed;
+        changed = true;
+      }
+    }
+    if (changed) {
+      const trimmed = next.slice(0, localCachePolicy.favoriteLimit);
+      localStorage.setItem(favoriteStorageKey(), JSON.stringify(trimmed));
+      renderFavoritesPanel();
+      renderHistory();
+    }
+  } catch {
+    // Favorites remain usable if shared snapshot refresh fails.
+  } finally {
+    state.hydratingFavoriteSnapshots = false;
   }
 }
 
@@ -6327,11 +6435,12 @@ function setInstallPlatform(platform) {
 function switchView(view) {
   state.activeView = view;
   document.body.classList.toggle("scan-view", view === "scan");
-  if (view !== "scan") setResultSheetExpanded(false);
-  if (view !== "search") hideSearchSuggestions();
   const isHome = view === "home";
   const isForYou = view === "forYou";
   const isSearch = view === "search";
+  document.body.classList.toggle("search-view", isSearch);
+  if (view !== "scan") setResultSheetExpanded(false);
+  if (!isSearch) hideSearchSuggestions();
   const isAppPage = isHome || isForYou || isSearch;
   els.signinPromptPanel.classList.toggle("view-hidden", Boolean(state.user) || isAppPage);
   els.freeSharePanel?.classList.toggle("view-hidden", isAppPage);
@@ -6406,10 +6515,90 @@ function userAiSettingsKey() {
   return `greenscan.ai-provider.${state.user?.id || state.user?.email || "guest"}`;
 }
 
+function captureReferralCode() {
+  if (!isOfficialGreenScanOrigin()) return;
+  const params = new URLSearchParams(window.location.search);
+  const code = normalizeReferralCode(params.get("ref") || params.get("invite"));
+  if (!code) return;
+  try {
+    localStorage.setItem(referralStorageKey, code);
+  } catch {}
+}
+
+function getPendingReferralCode() {
+  try {
+    return normalizeReferralCode(localStorage.getItem(referralStorageKey) || "");
+  } catch {
+    return "";
+  }
+}
+
+function clearPendingReferralCode() {
+  try {
+    localStorage.removeItem(referralStorageKey);
+  } catch {}
+}
+
+function normalizeReferralCode(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 40);
+}
+
 function openSettings() {
   switchView("settings");
   updateAccountUi();
   els.settingsDialog.showModal();
+  loadReferralStatus();
+}
+
+async function loadReferralStatus() {
+  if (!isOfficialGreenScanOrigin() || !state.user || !els.referralCard) {
+    els.referralCard?.classList.add("hidden");
+    return;
+  }
+  els.referralCard.classList.remove("hidden");
+  els.referralStatusText.textContent = "Loading your referral link...";
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/referral-status`, { headers: await apiHeadersAsync() });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not load referrals.");
+    renderReferralStatus(data);
+  } catch {
+    els.referralStatusText.textContent = "Referral details are unavailable right now. Try again later.";
+  }
+}
+
+function renderReferralStatus(data = {}) {
+  if (!isOfficialGreenScanOrigin() || !els.referralCard) return;
+  els.referralCard.classList.remove("hidden");
+  const link = data.referralLink || (data.code ? `https://greenscan.us/?ref=${encodeURIComponent(data.code)}` : "");
+  if (els.referralLinkInput) els.referralLinkInput.value = link;
+  const approved = Number(data.approvedBonus || 0);
+  const pending = Number(data.pending || 0);
+  const max = Number(data.maxBonus || 10);
+  els.referralStatusText.textContent = `${approved}/${max} referral bonus AI scans per day active. ${pending} pending referrals are waiting for the 24-hour scan check.`;
+}
+
+async function copyReferralLink() {
+  if (!isOfficialGreenScanOrigin()) return;
+  const link = els.referralLinkInput?.value || "";
+  if (!link) {
+    await loadReferralStatus();
+    return;
+  }
+  try {
+    if (navigator.share && isMobileInstallPromptTarget()) {
+      await navigator.share({ title: "GreenScan", text: "Try GreenScan ingredient scanning.", url: link });
+    } else {
+      await navigator.clipboard.writeText(link);
+      toast("Referral link copied.");
+    }
+  } catch {
+    toast("Could not copy referral link.");
+  }
+}
+
+function isOfficialGreenScanOrigin() {
+  return window.location.hostname === "greenscan.us" || window.location.hostname === "www.greenscan.us";
 }
 
 function openRestrictions() {
@@ -6434,7 +6623,19 @@ function openAiProvider() {
   state.userAiSettings = loadUserAiSettings();
   els.aiProviderSelect.value = state.userAiSettings.provider || "openai";
   els.userAiKey.value = state.userAiSettings.apiKey || "";
+  if (els.verifyUnknownIngredientsToggle) {
+    els.verifyUnknownIngredientsToggle.checked = state.userAiSettings.verifyUnknownIngredients !== false;
+  }
+  if (els.contributeToDatabaseToggle) {
+    els.contributeToDatabaseToggle.checked = state.userAiSettings.contributeToDatabase !== false;
+  }
+  updateAiProviderAdvancedVisibility();
   els.aiProviderDialog.showModal();
+}
+
+function updateAiProviderAdvancedVisibility() {
+  const hasApiKey = Boolean((els.userAiKey?.value || "").trim());
+  els.aiProviderAdvancedOptions?.classList.toggle("hidden", !hasApiKey);
 }
 
 function saveAiProvider() {
@@ -6450,6 +6651,8 @@ function saveAiProvider() {
   state.userAiSettings = {
     provider: els.aiProviderSelect.value,
     apiKey,
+    verifyUnknownIngredients: els.verifyUnknownIngredientsToggle?.checked !== false,
+    contributeToDatabase: els.contributeToDatabaseToggle?.checked !== false,
   };
   localStorage.setItem(userAiSettingsKey(), JSON.stringify(state.userAiSettings));
   els.aiProviderDialog.close();
@@ -6458,9 +6661,12 @@ function saveAiProvider() {
 }
 
 function clearAiProvider() {
-  state.userAiSettings = { provider: "openai", apiKey: "" };
+  state.userAiSettings = defaultUserAiSettings();
   localStorage.removeItem(userAiSettingsKey());
   els.userAiKey.value = "";
+  if (els.verifyUnknownIngredientsToggle) els.verifyUnknownIngredientsToggle.checked = true;
+  if (els.contributeToDatabaseToggle) els.contributeToDatabaseToggle.checked = true;
+  updateAiProviderAdvancedVisibility();
   els.aiProviderDialog.close();
   updateAccountUi();
   toast("Using GreenScan AI.");
@@ -6473,13 +6679,21 @@ function loadSettings() {
 function loadUserAiSettings() {
   try {
     return {
-      provider: "openai",
-      apiKey: "",
+      ...defaultUserAiSettings(),
       ...JSON.parse(localStorage.getItem(userAiSettingsKey()) || "{}"),
     };
   } catch {
-    return { provider: "openai", apiKey: "" };
+    return defaultUserAiSettings();
   }
+}
+
+function defaultUserAiSettings() {
+  return {
+    provider: "openai",
+    apiKey: "",
+    verifyUnknownIngredients: true,
+    contributeToDatabase: true,
+  };
 }
 
 function defaultAnalysisEndpoint() {
@@ -7932,7 +8146,7 @@ function logout() {
   state.user = null;
   state.isAdmin = false;
   state.accountSyncStarted = false;
-  state.userAiSettings = { provider: "openai", apiKey: "" };
+  state.userAiSettings = defaultUserAiSettings();
   loadPreferencesForCurrentAccount();
   localStorage.removeItem("clearscan.user");
   localStorage.removeItem("clearscan.userProfile");
@@ -7979,6 +8193,7 @@ function updateAccountUi() {
   els.googleLoginButton.classList.remove("hidden");
   els.signinPromptPanel.classList.remove("hidden");
   els.logoutButton.classList.add("hidden");
+  els.referralCard?.classList.add("hidden");
   els.aiProviderButton.textContent = "AI Provider";
   els.aiProviderButton.disabled = true;
   updateSearchAccessUi();
