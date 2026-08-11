@@ -124,14 +124,12 @@ export default {
     }
 
     if (url.pathname === "/api/public/status" && request.method === "GET") {
-      const helper = await helperHealth(env);
       return json({
         ok: true,
         systems: [
           { name: "Saved product database", ok: Boolean(env.PRODUCT_CACHE), detail: "Online" },
           { name: "Barcode lookup", ok: true, detail: "Open databases online" },
           { name: "AI image analysis", ok: Boolean(env.OPENAI_API_KEY), detail: env.OPENAI_API_KEY ? "Ready" : "Not configured" },
-          { name: "Local OCR helper", ok: Boolean(helper.ok), detail: helper.ok ? "Online" : "Fallback only" },
         ],
       }, 200, headers);
     }

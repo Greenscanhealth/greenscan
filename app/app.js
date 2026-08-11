@@ -89,6 +89,7 @@ const els = {
   trendingList: document.querySelector("#trendingList"),
   verifiedList: document.querySelector("#verifiedList"),
   statusList: document.querySelector("#statusList"),
+  landingServiceStatus: document.querySelector("#landingServiceStatus"),
   homeScreenPanel: document.querySelector("#homeScreenPanel"),
   installTabs: [...document.querySelectorAll(".install-tab")],
   installSteps: document.querySelector("#installSteps"),
@@ -531,6 +532,31 @@ const riskDictionary = [
   { match: "talc", type: "powder", risk: "moderate", reason: "FDA has warned that talc-containing cosmetics need reliable asbestos testing because talc can be contaminated with asbestos." },
   { match: "denatured alcohol", type: "cosmetic_base", risk: "moderate", reason: "Can be drying or irritating for some skin types." },
   { match: "alcohol denat", type: "cosmetic_base", risk: "moderate", reason: "Can be drying or irritating for some skin types." },
+];
+
+// Verified low-concern entries are kept separate from the concern list so arbitrary
+// text is never treated as a safe ingredient.
+const knownIngredientCatalog = [
+  { match: "water", type: "food_ingredient", categories: ["food"], reason: "Common food ingredient." },
+  { match: "salt", type: "food_ingredient", categories: ["food"], reason: "Common food ingredient; dietary sodium can still matter in the overall product." },
+  { match: "flour", type: "food_ingredient", categories: ["food"], reason: "Common grain-based food ingredient." },
+  { match: "wheat flour", type: "food_ingredient", categories: ["food"], reason: "Common grain-based food ingredient; contains wheat/gluten." },
+  { match: "corn starch", type: "food_ingredient", categories: ["food"], reason: "Common food thickener." },
+  { match: "citric acid", type: "food_ingredient", categories: ["food"], reason: "Common food acidulant and flavoring ingredient." },
+  { match: "ascorbic acid", type: "food_ingredient", categories: ["food"], reason: "Vitamin C; commonly used in foods." },
+  { match: "calcium carbonate", type: "food_ingredient", categories: ["food"], reason: "Common mineral ingredient in foods." },
+  { match: "soy lecithin", type: "food_ingredient", categories: ["food"], reason: "Common food emulsifier; soy-sensitive shoppers should check the label." },
+  { match: "xanthan gum", type: "food_ingredient", categories: ["food"], reason: "Common food thickener." },
+  { match: "guar gum", type: "food_ingredient", categories: ["food"], reason: "Common food thickener." },
+  { match: "glycerin", type: "cosmetic_base", categories: ["beauty"], reason: "Common humectant used to help retain moisture." },
+  { match: "aqua", type: "cosmetic_base", categories: ["beauty"], reason: "Water; common cosmetic base ingredient." },
+  { match: "water", type: "cosmetic_base", categories: ["beauty"], reason: "Common cosmetic base ingredient." },
+  { match: "niacinamide", type: "cosmetic_base", categories: ["beauty"], reason: "Common vitamin B3 skincare ingredient." },
+  { match: "hyaluronic acid", type: "cosmetic_base", categories: ["beauty"], reason: "Common humectant used in skincare." },
+  { match: "sodium hyaluronate", type: "cosmetic_base", categories: ["beauty"], reason: "Common humectant used in skincare." },
+  { match: "panthenol", type: "cosmetic_base", categories: ["beauty"], reason: "Common provitamin B5 conditioning ingredient." },
+  { match: "tocopherol", type: "cosmetic_base", categories: ["beauty"], reason: "Vitamin E; commonly used as an antioxidant in cosmetics." },
+  { match: "cetearyl alcohol", type: "cosmetic_base", categories: ["beauty"], reason: "Common fatty alcohol used for texture and conditioning." },
 ];
 
 const foodSugarTerms = ["sugar", "cane sugar", "glucose syrup", "corn syrup", "high fructose corn syrup", "dextrose", "maltodextrin", "fructose", "sucrose", "honey", "agave", "molasses", "invert sugar", "rice syrup", "barley malt", "maple syrup"];
@@ -2377,38 +2403,41 @@ function getIngredientAlias(value) {
   return match ? { canonical: match.canonical } : null;
 }
 
-function classifyIngredient(rawName, category) {
+function isIngredientCompatible(item, category) {
+  const normalizedCategory = String(category || "unknown").toLowerCase();
+  if (item.categories) return item.categories.includes(normalizedCategory);
+  if (normalizedCategory === "beauty" && foodOnlyIngredientTypes.has(item.type)) return false;
+  if (normalizedCategory === "food" && beautyOnlyIngredientTypes.has(item.type)) return false;
+  return true;
+}
+
+function findKnownIngredient(rawName, category, exact = false) {
   const cleanName = normalizeIngredientTextTypos(rawName).trim();
   const alias = getIngredientAlias(cleanName);
   const canonicalName = alias?.canonical || cleanName;
   const normalized = canonicalName.toLowerCase();
-  const normalizedCategory = String(category || "unknown").toLowerCase();
-  const hit = riskDictionary.find((item) => {
-    if (!normalized.includes(item.match)) return false;
-    if (normalizedCategory === "beauty" && foodOnlyIngredientTypes.has(item.type)) return false;
-    if (normalizedCategory === "food" && beautyOnlyIngredientTypes.has(item.type)) return false;
-    return true;
-  });
-  if (hit) {
+  const matches = (item) => exact ? normalized === item.match : normalized.includes(item.match);
+  const hit = riskDictionary.find((item) => matches(item) && isIngredientCompatible(item, category));
+  if (hit) return { hit, cleanName, normalized, alias };
+  const safeHit = knownIngredientCatalog.find((item) => normalized === item.match && isIngredientCompatible(item, category));
+  return safeHit ? { hit: { ...safeHit, risk: "low" }, cleanName, normalized, alias } : null;
+}
+
+function classifyIngredient(rawName, category) {
+  const found = findKnownIngredient(rawName, category);
+  const cleanName = normalizeIngredientTextTypos(rawName).trim();
+  if (found) {
+    const { hit, normalized, alias } = found;
     return {
-      rawName: toDisplayName(cleanName),
-      normalizedName: normalized,
-      type: hit.type,
-      risk: hit.risk,
-      riskScore: hit.risk === "high" ? 85 : 55,
-      reason: hit.reason,
-      aliasLabel: alias?.canonical || "",
+      rawName: toDisplayName(cleanName), normalizedName: normalized, type: hit.type, risk: hit.risk,
+      riskScore: hit.risk === "high" ? 85 : hit.risk === "moderate" ? 55 : 12,
+      reason: hit.reason, aliasLabel: alias?.canonical || "",
     };
   }
-
   return {
-    rawName: toDisplayName(cleanName),
-    normalizedName: normalized,
-    type: category === "beauty" ? "cosmetic_base" : "food_ingredient",
-    risk: "low",
-    riskScore: 12,
-    reason: "No major concern detected in the local screening dictionary.",
-    aliasLabel: alias?.canonical || "",
+    rawName: toDisplayName(cleanName), normalizedName: cleanName.toLowerCase(), type: "unverified_ingredient",
+    risk: "unknown", riskScore: 0,
+    reason: "This text is not a verified entry in the GreenScan ingredient dictionary, so it has not been given a safety rating.", aliasLabel: "",
   };
 }
 
@@ -3799,18 +3828,23 @@ function runIngredientDictionarySearch(query = els.productSearchInput.value.trim
     els.productSearchResults.innerHTML = `<p class="ingredient-empty">Type an ingredient name first.</p>`;
     return;
   }
-  const food = classifyIngredient(query, "food");
-  const beauty = classifyIngredient(query, "beauty");
-  const results = [food, beauty].filter((item, index, list) => {
-    const key = `${item.rawName}-${item.type}-${item.risk}-${item.reason}`;
-    return list.findIndex((other) => `${other.rawName}-${other.type}-${other.risk}-${other.reason}` === key) === index;
-  });
+  // Dictionary results require an exact verified ingredient or approved alias.
+  const results = ["food", "beauty"]
+    .map((category) => findKnownIngredient(query, category, true))
+    .filter(Boolean)
+    .map(({ hit, cleanName, normalized, alias }) => ({
+      rawName: toDisplayName(cleanName), normalizedName: normalized, type: hit.type, risk: hit.risk,
+      riskScore: hit.risk === "high" ? 85 : hit.risk === "moderate" ? 55 : 12,
+      reason: hit.reason, aliasLabel: alias?.canonical || "",
+    }))
+    .filter((item, index, list) => list.findIndex((other) => `${other.type}-${other.risk}-${other.reason}` === `${item.type}-${item.risk}-${item.reason}`) === index);
+  if (!results.length) {
+    els.productSearchResults.innerHTML = `<p class="ingredient-empty">No verified ingredient found for "${escapeHtml(query)}". Check the spelling or choose a suggestion; unknown text is never rated as safe.</p>`;
+    return;
+  }
   els.productSearchResults.innerHTML = results.map((ingredient) => `
     <article class="dictionary-card">
-      <div>
-        <p class="eyebrow">${escapeHtml(toDisplayName(ingredient.type.replaceAll("_", " ")))}</p>
-        <h3>${escapeHtml(ingredient.rawName)}</h3>
-      </div>
+      <div><p class="eyebrow">${escapeHtml(toDisplayName(ingredient.type.replaceAll("_", " ")))}</p><h3>${escapeHtml(ingredient.rawName)}</h3></div>
       <span class="risk ${escapeHtml(normalizeRisk(ingredient.risk))}">Potential ${escapeHtml(normalizeRisk(ingredient.risk))} risk ${Number(ingredient.riskScore || 0)}/100</span>
       <p>${escapeHtml(normalizeRisk(ingredient.risk) === "low" ? ingredient.reason : buildRiskIngredientSummary(ingredient))}</p>
       ${riskChipsToHtml(getIngredientRiskChips(ingredient).slice(0, 4))}
@@ -4024,26 +4058,49 @@ async function loadRecentlyVerifiedProducts() {
 }
 
 async function loadPublicStatus() {
-  if (!els.statusList) return;
-  els.statusList.innerHTML = `<p>Checking systems...</p>`;
+  if (!els.statusList && !els.landingServiceStatus) return;
+  if (els.statusList) els.statusList.innerHTML = `<p>Checking systems...</p>`;
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/public/status`);
+    if (!response.ok) throw new Error("Status request failed.");
     const data = await response.json();
-    const systems = Array.isArray(data.systems) ? data.systems : [];
-    els.statusList.innerHTML = systems.map((item) => `
-      <article class="status-row">
-        <span class="status-pill ${item.ok ? "" : "warn"}">${item.ok ? "OK" : "Check"}</span>
-        <div>
-          <strong>${escapeHtml(item.name || "System")}</strong>
-          <span>${escapeHtml(item.detail || "")}</span>
-        </div>
-      </article>
-    `).join("") || `<p>Status unavailable.</p>`;
+    const systems = (Array.isArray(data.systems) ? data.systems : [])
+      .filter((item) => item.name !== "Local OCR helper");
+    if (els.statusList) {
+      els.statusList.innerHTML = systems.map((item) => `
+        <article class="status-row">
+          <span class="status-pill ${item.ok ? "" : "warn"}">${item.ok ? "OK" : "Check"}</span>
+          <div>
+            <strong>${escapeHtml(item.name || "System")}</strong>
+            <span>${escapeHtml(item.detail || "")}</span>
+          </div>
+        </article>
+      `).join("") || `<p>Status unavailable.</p>`;
+    }
+    renderLandingServiceStatus(systems);
   } catch {
-    els.statusList.innerHTML = `<p>Status unavailable.</p>`;
+    if (els.statusList) els.statusList.innerHTML = `<p>Status unavailable.</p>`;
+    renderLandingServiceStatus([]);
   }
 }
 
+function renderLandingServiceStatus(systems) {
+  if (!els.landingServiceStatus) return;
+  const allOnline = systems.length > 0 && systems.every((item) => item.ok);
+  const serviceCount = systems.length;
+  const title = allOnline
+    ? "All GreenScan services are online"
+    : serviceCount
+      ? "Some GreenScan services need attention"
+      : "GreenScan service status is unavailable";
+  const detail = allOnline
+    ? `${serviceCount} primary services online · Local OCR helper excluded`
+    : "Local OCR helper excluded";
+  els.landingServiceStatus.innerHTML = `
+    <span class="landing-service-dot ${allOnline ? "online" : "offline"}" aria-hidden="true"></span>
+    <div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span></div>
+  `;
+}
 function renderMiniProducts(container, products, emptyText, metaType = "") {
   if (!container) return;
   if (!products.length) {
