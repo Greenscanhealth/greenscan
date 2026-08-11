@@ -52,6 +52,9 @@
           </div>
         </div>
         <div class="top-actions">
+          <button class="icon-button guide-launch-button" id="guideLaunchButton" type="button" aria-label="Open GreenScan Guide" title="Ask Guide">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H9l-4 3v-3a4 4 0 0 1-2-3.5V9a4 4 0 0 1 2-4Z" /><path d="m15.5 3 .55 1.45L17.5 5l-1.45.55L15.5 7l-.55-1.45L13.5 5l1.45-.55L15.5 3Z" /></svg>
+          </button>
           <button class="icon-button app-menu-button" id="topMenuButton" type="button" aria-label="Open app menu" title="Menu" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="5" cy="5" r="1.6" /><circle cx="12" cy="5" r="1.6" /><circle cx="19" cy="5" r="1.6" />
@@ -357,12 +360,12 @@
               </span>
               <div>
                 <p>GreenScan release</p>
-                <h3 id="landingReleaseTitle">Version 1.0.2</h3>
+                <h3 id="landingReleaseTitle">Version 1.0.3</h3>
               </div>
             </div>
             <div class="landing-release-update">
               <span>Latest update</span>
-              <strong>Referrals, API-key privacy controls, stronger label reading, and cleaner mobile/settings polish.</strong>
+              <strong>GreenScan Guide chat, DeepSeek/Z.ai model options, admin Guide limits, and stronger API-key privacy.</strong>
             </div>
             <div class="landing-service-status" id="landingServiceStatus" role="status" aria-live="polite">
               <span class="landing-service-dot checking" aria-hidden="true"></span>
@@ -444,6 +447,13 @@
             <span>Scan</span>
           </button>
         </div>
+        <button type="button" class="guide-welcome-card" id="forYouGuideButton">
+          <span class="guide-welcome-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H9l-4 3v-3a4 4 0 0 1-2-3.5V9a4 4 0 0 1 2-4Z" /><path d="m15.5 3 .55 1.45L17.5 5l-1.45.55L15.5 7l-.55-1.45L13.5 5l1.45-.55L15.5 3Z" /></svg>
+          </span>
+          <span><small>GreenScan Guide</small><strong>Ask about a product or ingredient</strong><em>8 included prompts each day</em></span>
+          <span class="guide-card-arrow" aria-hidden="true">&rarr;</span>
+        </button>
         <section class="friendly-dashboard-metrics" aria-label="Saved product summary">
           <div>
             <span class="friendly-metric-icon bookmark" aria-hidden="true"></span>
@@ -463,6 +473,50 @@
           <button class="ghost-button" id="clearHistoryButton">Clear</button>
         </div>
         <div class="history-list" id="historyList"></div>
+      </section>
+
+      <section class="guide-panel view-hidden" id="guidePanel" aria-label="GreenScan Guide">
+        <header class="guide-header">
+          <div class="guide-title-lockup">
+            <span class="guide-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H9l-4 3v-3a4 4 0 0 1-2-3.5V9a4 4 0 0 1 2-4Z" /><path d="m15.5 3 .55 1.45L17.5 5l-1.45.55L15.5 7l-.55-1.45L13.5 5l1.45-.55L15.5 3Z" /></svg></span>
+            <div><p class="eyebrow">GreenScan Guide</p><h2>Ask Guide</h2></div>
+          </div>
+          <div class="guide-header-actions">
+            <button type="button" class="ghost-button" id="guideLearnButton">Learn more</button>
+            <button type="button" class="icon-button" id="guideNewChatButton" aria-label="Start a new Guide chat" title="New chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>
+            <button type="button" class="icon-button" id="guideCloseButton" aria-label="Close GreenScan Guide" title="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+          </div>
+        </header>
+        <div class="guide-welcome" id="guideWelcome">
+          <div class="guide-hero-copy">
+            <p class="eyebrow">A clearer way to choose</p>
+            <h2 id="guideGreeting">Hi. What can Guide help you understand?</h2>
+            <p>Ask about ingredients, enter a barcode, find a product, or get a simpler explanation of a GreenScan score.</p>
+          </div>
+          <div class="guide-intro-grid">
+            <article><img src="./greenscan-search-icon.png" alt="GreenScan product lookup" /><strong>Find products</strong><span>Enter a name or barcode and choose a verified listing.</span></article>
+            <article><img src="./greenscan-index-logo.png" alt="GreenScan ingredient guidance" /><strong>Understand ingredients</strong><span>Get calm, plain-language context about potential concerns.</span></article>
+            <article><img src="./greenscan-icon-192.png" alt="GreenScan personalized guidance" /><strong>Use your preferences</strong><span>Guide considers your dietary filters and personal avoid list.</span></article>
+          </div>
+          <div class="guide-suggestions" aria-label="Suggested Guide questions">
+            <button type="button" data-guide-prompt="Explain the biggest ingredient concerns I should know about.">Explain ingredient concerns</button>
+            <button type="button" data-guide-prompt="Help me find a product by name or barcode.">Find a product</button>
+            <button type="button" data-guide-prompt="How does GreenScan decide a product score?">Explain GreenScan scores</button>
+          </div>
+        </div>
+        <div class="guide-messages" id="guideMessages" aria-live="polite"></div>
+        <div class="guide-composer-shell">
+          <div class="guide-model-row">
+            <label for="guideModelSelect">Model</label>
+            <select id="guideModelSelect" aria-label="Guide AI model"></select>
+            <span id="guideLimitText">8 prompts left today</span>
+          </div>
+          <form class="guide-composer" id="guideForm">
+            <textarea id="guideInput" rows="1" maxlength="1200" placeholder="Ask about a product, ingredient, or barcode..."></textarea>
+            <button type="submit" class="icon-button submit" id="guideSendButton" aria-label="Send to Guide" title="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-6-8-2Z" /><path d="m12 14 3-3" /></svg></button>
+          </form>
+          <p class="guide-disclaimer">Guide provides informational context, not medical advice. Always verify the current package label.</p>
+        </div>
       </section>
 
       <section class="search-panel view-hidden">
@@ -701,6 +755,15 @@
               </div>
             </div>
             <div>
+              <h4>Unlimited GreenScan Guide</h4>
+              <p>Removes only the daily Guide prompt limit for the email. The global safety budget still applies.</p>
+              <div class="input-row">
+                <input id="grantGuideUnlimitedEmail" type="email" autocomplete="off" placeholder="name@example.com" />
+                <button type="button" class="icon-button submit" id="grantGuideUnlimitedButton" aria-label="Grant unlimited Guide" title="Grant unlimited Guide"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14" /><path d="M5 12h14" /></svg></button>
+                <button type="button" class="icon-button submit" id="revokeGuideUnlimitedButton" aria-label="Revoke unlimited Guide" title="Revoke unlimited Guide"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg></button>
+              </div>
+            </div>
+            <div>
               <h4>Ban or unban user</h4>
               <p>Blocks abusive accounts from account sync, reporting, searching, AI analysis, and shared edits.</p>
               <div class="input-row">
@@ -725,6 +788,8 @@
               <label>Product searches<input id="limitSearches" type="number" min="1" max="200" inputmode="numeric" /></label>
               <label>Category checks<input id="limitCategoryChecks" type="number" min="0" max="50" inputmode="numeric" /></label>
               <label>Image uploads<input id="limitImageUploads" type="number" min="0" max="50" inputmode="numeric" /></label>
+              <label>Guide prompts<input id="limitGuidePrompts" type="number" min="1" max="50" inputmode="numeric" /></label>
+              <label>Guide global budget<input id="limitGuideGlobal" type="number" min="10" max="1000" inputmode="numeric" /></label>
             </div>
             <button type="button" class="primary-button full" id="saveLimitsButton">Save limits</button>
           </div>
@@ -856,7 +921,7 @@
         <div class="source-card">
           <p class="eyebrow">Optional</p>
           <h3>Use your own AI key</h3>
-          <p>GreenScan provides AI analysis by default. Signed-in users can use their own provider key for more freedom. Your key is saved on this device and sent only to GreenScan's analysis API when you analyze a product. GreenScan daily AI limits do not apply when you use your own key.</p>
+          <p>GreenScan provides AI analysis by default. Save separate provider keys on this device, then choose among them in Guide or for label analysis. Keys are never synced to your account or shown to administrators.</p>
         </div>
         <label>
           Provider
@@ -864,6 +929,8 @@
             <option value="openai">ChatGPT</option>
             <option value="anthropic">Anthropic</option>
             <option value="google">Google</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="zai">Z.ai GLM Vision</option>
           </select>
         </label>
         <label>
@@ -871,11 +938,16 @@
           <input id="userAiKey" type="password" autocomplete="off" placeholder="Paste your API key" />
         </label>
         <div class="ai-provider-options hidden" id="aiProviderAdvancedOptions" aria-label="AI provider options">
+          <label>
+            Model
+            <select id="aiModelSelect"></select>
+            <small id="aiModelHint">Recommended model is selected automatically.</small>
+          </label>
           <label class="settings-toggle-row">
             <input id="verifyUnknownIngredientsToggle" type="checkbox" />
             <span>
               <strong>Verify unusual ingredient names</strong>
-              <small>When you use your own API key, GreenScan can double-check names that look misspelled or incomplete before rating them.</small>
+              <small>When you use your own API key, GreenScan can double-check names that look misspelled or incomplete before rating them. DeepSeek is used after OCR/text extraction; Z.ai GLM Vision can read label photos directly.</small>
             </span>
           </label>
           <label class="settings-toggle-row">
@@ -888,6 +960,7 @@
         </div>
         <button type="button" class="primary-button full" id="saveAiProviderButton">Save AI provider</button>
         <button type="button" class="secondary-button full" id="clearAiProviderButton">Use GreenScan AI</button>
+        <div class="ai-provider-profile-list" id="aiProviderProfileList" aria-live="polite"></div>
       </form>
     </dialog>
 
@@ -903,6 +976,17 @@
           </button>
         </div>
         <div class="changelog-list">
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">Version 1.0.3</p>
+            <h3>GreenScan Guide and provider security</h3>
+            <ul>
+              <li>Added GreenScan Guide, a signed-in AI chat for product, ingredient, barcode, and safer-choice questions.</li>
+              <li>Added product-page Ask Guide prompts for quick summaries, score explanations, and avoid/limit guidance.</li>
+              <li>Added AI Provider model choices for OpenAI, Anthropic, Google Gemini, DeepSeek, and Z.ai, including Guide-specific model recommendations.</li>
+              <li>Added admin controls for Guide daily limits, shared Guide budget, and unlimited Guide access by email.</li>
+              <li>Hardened API-key privacy: user keys stay device-only, are sent only for the active request, and provider errors are redacted before display.</li>
+            </ul>
+          </article>
           <article class="source-card changelog-entry">
             <p class="eyebrow">Version 1.0.2</p>
             <h3>Referral rewards and AI controls</h3>
@@ -1013,6 +1097,11 @@
           <p>If a barcode is not found in the open databases, GreenScan asks for product photos and uses AI to read the ingredient label, rate the product, and save that barcode result in our database so future scans can load it without using AI again.</p>
         </div>
         <div class="source-card">
+          <p class="eyebrow">GreenScan Guide</p>
+          <h3>AI co-created with Saz3 Labs</h3>
+          <p>GreenScan Guide AI was co-created with Saz3 Labs to make product and ingredient information easier to understand. Guide uses GreenScan product data and your selected preferences, does not save chat history, and is not medical advice.</p>
+        </div>
+        <div class="source-card">
           <p class="eyebrow">Offline behavior</p>
           <h3>Known products work offline, new labels queue</h3>
           <p>When you do not have internet, GreenScan can still open the app shell and load products already saved on your device. New ingredient photos, front-label photos, pasted ingredients, and nutrition labels can be saved into a small on-device queue. When you reopen GreenScan with internet, queued items are analyzed once, deduplicated by barcode and label fingerprint, and then added to the shared database when possible.</p>
@@ -1020,7 +1109,7 @@
         <div class="source-card">
           <p class="eyebrow">Your AI key</p>
           <h3>Optional personal provider</h3>
-          <p>Signed-in users can add their own ChatGPT, Anthropic, or Google AI API key in Settings. This is optional; GreenScan provides AI by default, but using your own key gives you more control over your own analysis usage. GreenScan daily AI limits do not apply when your own key is used.</p>
+          <p>Signed-in users can add their own OpenAI, Anthropic, Google, DeepSeek, or Z.ai API keys in Settings. Keys stay on that device and are sent only for the selected request. GreenScan daily AI limits do not apply when your own key is used.</p>
         </div>
         <div class="source-card">
           <p class="eyebrow">Open source</p>

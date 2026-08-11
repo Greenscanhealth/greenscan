@@ -48,6 +48,11 @@ const state = {
   activeIngredient: null,
   renderedIngredients: new Map(),
   ingredientRenderId: 0,
+  guideMessages: [],
+  guideBusy: false,
+  guideReturnView: "forYou",
+  guideProduct: null,
+  guideLimit: { limit: 8, remaining: 8, unlimited: false },
 };
 
 const OWNER_ADMIN_EMAIL = "littlesaz454@gmail.com";
@@ -117,6 +122,7 @@ const els = {
   friendlyNutritionCard: document.querySelector("#friendlyNutritionCard"),
   friendlySwapsCard: document.querySelector("#friendlySwapsCard"),
   topMenuButton: document.querySelector("#topMenuButton"),
+  guideLaunchButton: document.querySelector("#guideLaunchButton"),
   topMenu: document.querySelector("#topMenu"),
   notificationButton: document.querySelector("#notificationButton"),
   notificationDot: document.querySelector("#notificationDot"),
@@ -147,7 +153,10 @@ const els = {
   aiProviderDialog: document.querySelector("#aiProviderDialog"),
   aiProviderSelect: document.querySelector("#aiProviderSelect"),
   userAiKey: document.querySelector("#userAiKey"),
+  aiModelSelect: document.querySelector("#aiModelSelect"),
+  aiModelHint: document.querySelector("#aiModelHint"),
   aiProviderAdvancedOptions: document.querySelector("#aiProviderAdvancedOptions"),
+  aiProviderProfileList: document.querySelector("#aiProviderProfileList"),
   verifyUnknownIngredientsToggle: document.querySelector("#verifyUnknownIngredientsToggle"),
   contributeToDatabaseToggle: document.querySelector("#contributeToDatabaseToggle"),
   saveAiProviderButton: document.querySelector("#saveAiProviderButton"),
@@ -183,6 +192,11 @@ const els = {
   limitSearches: document.querySelector("#limitSearches"),
   limitCategoryChecks: document.querySelector("#limitCategoryChecks"),
   limitImageUploads: document.querySelector("#limitImageUploads"),
+  limitGuidePrompts: document.querySelector("#limitGuidePrompts"),
+  limitGuideGlobal: document.querySelector("#limitGuideGlobal"),
+  grantGuideUnlimitedEmail: document.querySelector("#grantGuideUnlimitedEmail"),
+  grantGuideUnlimitedButton: document.querySelector("#grantGuideUnlimitedButton"),
+  revokeGuideUnlimitedButton: document.querySelector("#revokeGuideUnlimitedButton"),
   saveLimitsButton: document.querySelector("#saveLimitsButton"),
   adminReportList: document.querySelector("#adminReportList"),
   reportButton: document.querySelector("#reportButton"),
@@ -223,6 +237,19 @@ const els = {
   navScanButton: document.querySelector("#navScanButton"),
   navSearchButton: document.querySelector("#navSearchButton"),
   navSourcesButton: document.querySelector("#navSourcesButton"),
+  forYouGuideButton: document.querySelector("#forYouGuideButton"),
+  guidePanel: document.querySelector("#guidePanel"),
+  guideLearnButton: document.querySelector("#guideLearnButton"),
+  guideNewChatButton: document.querySelector("#guideNewChatButton"),
+  guideCloseButton: document.querySelector("#guideCloseButton"),
+  guideWelcome: document.querySelector("#guideWelcome"),
+  guideGreeting: document.querySelector("#guideGreeting"),
+  guideMessages: document.querySelector("#guideMessages"),
+  guideForm: document.querySelector("#guideForm"),
+  guideInput: document.querySelector("#guideInput"),
+  guideSendButton: document.querySelector("#guideSendButton"),
+  guideModelSelect: document.querySelector("#guideModelSelect"),
+  guideLimitText: document.querySelector("#guideLimitText"),
   desktopNavToggle: document.querySelector("#desktopNavToggle"),
   productSearchForm: document.querySelector("#productSearchForm"),
   productSearchInput: document.querySelector("#productSearchInput"),
@@ -251,6 +278,68 @@ const localCachePolicy = {
   keepProductImages: 6,
   keepHistoryImages: 3,
   maxInlineImageLength: 90000,
+};
+
+const aiProviderModels = {
+  openai: [
+    { value: "gpt-5.4", label: "Balanced: GPT-5.4 (recommended)" },
+    { value: "gpt-5.6-luna", label: "Least cost: GPT-5.6 Luna" },
+    { value: "gpt-5.4-mini", label: "Budget: GPT-5.4 mini" },
+    { value: "gpt-5.6-sol", label: "Best quality: GPT-5.6 Sol" },
+    { value: "gpt-4o-mini", label: "Legacy: GPT-4o mini" },
+    { value: "gpt-4o", label: "Legacy quality: GPT-4o" },
+  ],
+  anthropic: [
+    { value: "claude-sonnet-5", label: "Balanced: Claude Sonnet 5 (recommended)" },
+    { value: "claude-haiku-4-5", label: "Least cost: Claude Haiku 4.5" },
+    { value: "claude-opus-5", label: "Best quality: Claude Opus 5" },
+    { value: "claude-3-5-sonnet-latest", label: "Legacy: Claude 3.5 Sonnet" },
+  ],
+  google: [
+    { value: "gemini-2.5-flash", label: "Balanced: Gemini 2.5 Flash (recommended)" },
+    { value: "gemini-2.5-flash-lite", label: "Least cost: Gemini 2.5 Flash-Lite" },
+    { value: "gemini-2.5-pro", label: "Best quality: Gemini 2.5 Pro" },
+    { value: "gemini-2.0-flash", label: "Legacy: Gemini 2.0 Flash" },
+  ],
+  deepseek: [
+    { value: "deepseek-v4-flash", label: "Least cost / Balanced: DeepSeek V4 Flash (recommended)" },
+    { value: "deepseek-reasoner", label: "Reasoning quality: DeepSeek Reasoner" },
+  ],
+  zai: [
+    { value: "glm-5v-turbo", label: "Balanced / Best quality: GLM-5V Turbo (recommended)" },
+    { value: "glm-4.5v", label: "Least cost: GLM-4.5V" },
+  ],
+};
+
+const guideProviderModels = {
+  greenscan: [
+    { value: "greenscan", label: "GreenScan AI - included" },
+  ],
+  openai: [
+    { value: "gpt-5.6-luna", label: "Least cost: GPT-5.6 Luna (recommended)" },
+    { value: "gpt-5.6-terra", label: "Balanced: GPT-5.6 Terra" },
+    { value: "gpt-5.6-sol", label: "Best quality: GPT-5.6 Sol" },
+  ],
+  anthropic: [
+    { value: "claude-haiku-4-5", label: "Least cost: Claude Haiku 4.5" },
+    { value: "claude-sonnet-5", label: "Balanced: Claude Sonnet 5 (recommended)" },
+    { value: "claude-opus-5", label: "Best quality: Claude Opus 5" },
+  ],
+  google: [
+    { value: "gemini-3.5-flash-lite", label: "Least cost: Gemini 3.5 Flash-Lite" },
+    { value: "gemini-3.6-flash", label: "Balanced: Gemini 3.6 Flash (recommended)" },
+    { value: "gemini-3.1-pro", label: "Best quality: Gemini 3.1 Pro" },
+  ],
+  deepseek: [
+    { value: "deepseek-v4-flash", label: "Least cost: DeepSeek V4 Flash (recommended)" },
+    { value: "deepseek-v4-pro", label: "Best quality: DeepSeek V4 Pro" },
+    { value: "deepseek-reasoner", label: "Reasoning: DeepSeek Reasoner" },
+  ],
+  zai: [
+    { value: "glm-4.7-flash", label: "Least cost: GLM-4.7 Flash" },
+    { value: "glm-5", label: "Balanced: GLM-5 (recommended)" },
+    { value: "glm-5.1", label: "Best quality: GLM-5.1" },
+  ],
 };
 
 const itemCategoryOptions = {
@@ -796,6 +885,17 @@ els.manualIngredients.addEventListener("input", updateAnalyzeButton);
 els.analyzePhotoButton.addEventListener("click", analyzeCurrentPhoto);
 els.clearHistoryButton.addEventListener("click", clearHistory);
 els.topMenuButton.addEventListener("click", toggleTopMenu);
+els.guideLaunchButton?.addEventListener("click", () => openGuide());
+els.forYouGuideButton?.addEventListener("click", () => openGuide());
+els.guideCloseButton?.addEventListener("click", closeGuide);
+els.guideNewChatButton?.addEventListener("click", resetGuideChat);
+els.guideLearnButton?.addEventListener("click", () => els.guideWelcome?.classList.toggle("hidden"));
+els.guideForm?.addEventListener("submit", sendGuideMessage);
+els.guideModelSelect?.addEventListener("change", saveGuideModelChoice);
+els.guideWelcome?.querySelectorAll("[data-guide-prompt]").forEach((button) => button.addEventListener("click", () => {
+  els.guideInput.value = button.dataset.guidePrompt || "";
+  sendGuideMessage();
+}));
 els.notificationButton.addEventListener("click", () => {
   closeTopMenu();
   openNotifications();
@@ -848,6 +948,7 @@ els.restrictionsButton.addEventListener("click", openRestrictions);
 els.saveAvoidListButton.addEventListener("click", saveAvoidListFromSettings);
 els.saveAiProviderButton.addEventListener("click", saveAiProvider);
 els.clearAiProviderButton.addEventListener("click", clearAiProvider);
+els.aiProviderSelect?.addEventListener("change", loadSelectedAiProviderProfile);
 els.userAiKey?.addEventListener("input", updateAiProviderAdvancedVisibility);
 els.copyReferralLinkButton?.addEventListener("click", copyReferralLink);
 els.logoutButton.addEventListener("click", logout);
@@ -856,6 +957,8 @@ els.changelogButton.addEventListener("click", openChangelog);
 els.adminPanelButton.addEventListener("click", openAdminPanel);
 els.grantAdminButton.addEventListener("click", grantAdminAccess);
 els.grantUnlimitedButton.addEventListener("click", grantUnlimitedAccess);
+els.grantGuideUnlimitedButton?.addEventListener("click", () => updateGuideUnlimitedAccess("grant"));
+els.revokeGuideUnlimitedButton?.addEventListener("click", () => updateGuideUnlimitedAccess("revoke"));
 els.banUserButton?.addEventListener("click", () => updateUserBan(true));
 els.unbanUserButton?.addEventListener("click", () => updateUserBan(false));
 els.saveLimitsButton.addEventListener("click", saveAdminLimits);
@@ -990,6 +1093,7 @@ function renderScannerProductPreview(analysis) {
   if (!els.scanProductPreview || !analysis) return;
   els.scanPreviewName.textContent = analysis.name || "Scanned product";
   els.scanPreviewMeta.textContent = [analysis.brand, analysis.itemCategory].filter(Boolean).join(" · ") || "Open product details";
+  els.scanPreviewMeta.textContent = [analysis.brand, analysis.itemCategory].filter(Boolean).join(" / ") || "Open product details";
   const previewScore = Number.isFinite(Number(analysis.safetyScore))
     ? Math.max(0, Math.min(100, Number(analysis.safetyScore)))
     : 0;
@@ -2601,6 +2705,24 @@ function buildSummary(score, ingredients, category) {
   return `This ${label} has multiple or high-priority ingredient concerns.`;
 }
 
+function renderGuideProductCard(analysis) {
+  return `
+    <section class="product-guide-card" aria-label="Ask GreenScan Guide about this product">
+      <div class="product-guide-heading">
+        <span class="guide-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H9l-4 3v-3a4 4 0 0 1-2-3.5V9a4 4 0 0 1 2-4Z" /><path d="m15.5 3 .55 1.45L17.5 5l-1.45.55L15.5 7l-.55-1.45L13.5 5l1.45-.55L15.5 3Z" /></svg></span>
+        <div><p class="eyebrow">Ask Guide</p><h3>Want a simpler explanation?</h3></div>
+      </div>
+      <p>Guide can summarize this listing using the product data already shown on this page.</p>
+      <div class="product-guide-actions">
+        <button type="button" data-ask-guide="Summarize this product in plain language. Focus on the most useful positives and potential concerns.">Quick summary</button>
+        <button type="button" data-ask-guide="Explain why this product received its GreenScan score. Be concise and refer only to the supplied listing.">Why this score?</button>
+        <button type="button" data-ask-guide="Based on the supplied listing, who might want to avoid or limit this product? Do not give medical advice.">Who may avoid it?</button>
+      </div>
+      <small>No AI request is made until you choose a question.</small>
+    </section>
+  `;
+}
+
 function renderResult(analysis, options = {}) {
   const safeAnalysis = normalizeRenderableAnalysis(analysis);
   const cachedImageUrl = findCachedProductImageUrl(safeAnalysis.barcode);
@@ -2699,6 +2821,7 @@ function renderResult(analysis, options = {}) {
     </nav>
     ${renderScoreBreakdown(safeAnalysis)}
     ${renderDataQualityCard(safeAnalysis)}
+    ${renderGuideProductCard(safeAnalysis)}
     ${renderFormulaChangeAlert(formulaChange)}
     ${renderAllergenCrossContactCard(safeAnalysis)}
     ${renderBeautyUseContext(safeAnalysis)}
@@ -2845,6 +2968,12 @@ function renderResult(analysis, options = {}) {
   });
   els.resultPanel.querySelectorAll("[data-country-formula]").forEach((button) => {
     button.addEventListener("click", () => compareCountryFormula(safeAnalysis, button.dataset.countryFormula));
+  });
+  els.resultPanel.querySelectorAll("[data-ask-guide]").forEach((button) => {
+    button.addEventListener("click", () => openGuide({
+      product: safeAnalysis,
+      prompt: button.dataset.askGuide || "Give me a simple summary of this product.",
+    }));
   });
   if (adminPreviewBackButton) adminPreviewBackButton.addEventListener("click", returnToAdminFromPreview);
   els.resultPanel.querySelectorAll("[data-alt-barcode]").forEach((button) => {
@@ -5107,6 +5236,7 @@ async function analyzeWithEdgeFunction() {
     userId: state.user?.id || "",
     userAiProvider: state.user ? state.userAiSettings.provider : "",
     userAiKey: state.user ? state.userAiSettings.apiKey : "",
+    userAiModel: state.user ? getSelectedUserAiModel() : "",
     userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
     allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false,
     hasNutritionFacts: state.selectedProductType === "food" ? state.labelHasNutritionFacts : "not_applicable",
@@ -5158,6 +5288,7 @@ async function buildCurrentAnalysisPayload() {
     userId: state.user?.id || "",
     userAiProvider: state.user ? state.userAiSettings.provider : "",
     userAiKey: state.user ? state.userAiSettings.apiKey : "",
+    userAiModel: state.user ? getSelectedUserAiModel() : "",
     userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
     allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false,
     hasNutritionFacts: state.selectedProductType === "food" ? state.labelHasNutritionFacts : "not_applicable",
@@ -5240,7 +5371,7 @@ function isNetworkError(error) {
   return /failed to fetch|network|load failed|internet|offline/.test(message);
 }
 
-let pendingAnalysisSyncing = false;
+var pendingAnalysisSyncing = false;
 
 async function syncPendingAnalyses() {
   if (pendingAnalysisSyncing || !navigator.onLine || !getAnalysisEndpoint()) return;
@@ -5262,6 +5393,7 @@ async function syncPendingAnalyses() {
           userId: state.user?.id || item.payload.userId || "",
           userAiProvider: state.user ? state.userAiSettings.provider : item.payload.userAiProvider || "",
           userAiKey: state.user ? state.userAiSettings.apiKey : "",
+          userAiModel: state.user ? getSelectedUserAiModel() : item.payload.userAiModel || "",
           userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
           allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false && item.payload.allowSharedDatabaseContribution !== false,
         };
@@ -6435,13 +6567,15 @@ function setInstallPlatform(platform) {
 function switchView(view) {
   state.activeView = view;
   document.body.classList.toggle("scan-view", view === "scan");
+  document.body.classList.toggle("guide-view", view === "guide");
   const isHome = view === "home";
   const isForYou = view === "forYou";
   const isSearch = view === "search";
+  const isGuide = view === "guide";
   document.body.classList.toggle("search-view", isSearch);
   if (view !== "scan") setResultSheetExpanded(false);
   if (!isSearch) hideSearchSuggestions();
-  const isAppPage = isHome || isForYou || isSearch;
+  const isAppPage = isHome || isForYou || isSearch || isGuide;
   els.signinPromptPanel.classList.toggle("view-hidden", Boolean(state.user) || isAppPage);
   els.freeSharePanel?.classList.toggle("view-hidden", isAppPage);
   els.appDescriptionPanel?.classList.toggle("view-hidden", isAppPage);
@@ -6455,12 +6589,14 @@ function switchView(view) {
   document.querySelector(".landing-home-panel").classList.toggle("view-hidden", !isHome);
   document.querySelector(".history-panel").classList.toggle("view-hidden", !isForYou);
   document.querySelector(".search-panel").classList.toggle("view-hidden", !isSearch);
+  els.guidePanel?.classList.toggle("view-hidden", !isGuide);
   els.fallbackPanel.classList.toggle("view-hidden", isAppPage);
   els.navHistoryButton.classList.toggle("active", isHome);
   els.navForYouButton.classList.toggle("active", isForYou);
   els.navScanButton.classList.toggle("active", view === "scan");
   els.navSearchButton.classList.toggle("active", isSearch);
   els.navSourcesButton.classList.remove("active");
+  document.querySelector(".bottom-nav")?.classList.toggle("guide-nav-hidden", isGuide);
   if (isForYou) renderHistory();
   if (isSearch) {
     if (state.user) renderRecentSearches();
@@ -6622,7 +6758,7 @@ function openAiProvider() {
   }
   state.userAiSettings = loadUserAiSettings();
   els.aiProviderSelect.value = state.userAiSettings.provider || "openai";
-  els.userAiKey.value = state.userAiSettings.apiKey || "";
+  loadSelectedAiProviderProfile();
   if (els.verifyUnknownIngredientsToggle) {
     els.verifyUnknownIngredientsToggle.checked = state.userAiSettings.verifyUnknownIngredients !== false;
   }
@@ -6630,12 +6766,39 @@ function openAiProvider() {
     els.contributeToDatabaseToggle.checked = state.userAiSettings.contributeToDatabase !== false;
   }
   updateAiProviderAdvancedVisibility();
+  renderAiProviderProfiles();
   els.aiProviderDialog.showModal();
+}
+
+function loadSelectedAiProviderProfile() {
+  const provider = els.aiProviderSelect?.value || "openai";
+  const profile = state.userAiSettings.profiles?.[provider] || {};
+  if (els.userAiKey) els.userAiKey.value = profile.apiKey || "";
+  renderAiModelOptions(profile.model || (provider === state.userAiSettings.provider ? state.userAiSettings.model : ""));
+  updateAiProviderAdvancedVisibility();
 }
 
 function updateAiProviderAdvancedVisibility() {
   const hasApiKey = Boolean((els.userAiKey?.value || "").trim());
   els.aiProviderAdvancedOptions?.classList.toggle("hidden", !hasApiKey);
+}
+
+function renderAiModelOptions(preferredModel = "") {
+  if (!els.aiModelSelect) return;
+  const provider = els.aiProviderSelect?.value || "openai";
+  const models = aiProviderModels[provider] || aiProviderModels.openai;
+  const selectedModel = preferredModel && models.some((model) => model.value === preferredModel)
+    ? preferredModel
+    : models[0].value;
+  els.aiModelSelect.innerHTML = models
+    .map((model) => `<option value="${model.value}">${model.label}</option>`)
+    .join("");
+  els.aiModelSelect.value = selectedModel;
+  if (els.aiModelHint) {
+    els.aiModelHint.textContent = provider === "deepseek"
+      ? "DeepSeek is best when GreenScan already has OCR text or typed ingredients."
+      : "Recommended model is selected automatically for label photos.";
+  }
 }
 
 function saveAiProvider() {
@@ -6648,15 +6811,23 @@ function saveAiProvider() {
     toast("Paste an API key first.");
     return;
   }
+  const provider = els.aiProviderSelect.value;
+  const model = els.aiModelSelect?.value || getRecommendedAiModel(provider);
+  const profiles = { ...(state.userAiSettings.profiles || {}) };
+  profiles[provider] = { apiKey, model };
   state.userAiSettings = {
-    provider: els.aiProviderSelect.value,
+    ...state.userAiSettings,
+    provider,
     apiKey,
+    model,
+    profiles,
     verifyUnknownIngredients: els.verifyUnknownIngredientsToggle?.checked !== false,
     contributeToDatabase: els.contributeToDatabaseToggle?.checked !== false,
   };
-  localStorage.setItem(userAiSettingsKey(), JSON.stringify(state.userAiSettings));
+  persistUserAiSettings();
   els.aiProviderDialog.close();
   updateAccountUi();
+  renderGuideModelOptions();
   toast("AI provider saved.");
 }
 
@@ -6666,9 +6837,11 @@ function clearAiProvider() {
   els.userAiKey.value = "";
   if (els.verifyUnknownIngredientsToggle) els.verifyUnknownIngredientsToggle.checked = true;
   if (els.contributeToDatabaseToggle) els.contributeToDatabaseToggle.checked = true;
+  renderAiModelOptions();
   updateAiProviderAdvancedVisibility();
   els.aiProviderDialog.close();
   updateAccountUi();
+  renderGuideModelOptions();
   toast("Using GreenScan AI.");
 }
 
@@ -6678,22 +6851,247 @@ function loadSettings() {
 
 function loadUserAiSettings() {
   try {
-    return {
+    const saved = {
       ...defaultUserAiSettings(),
       ...JSON.parse(localStorage.getItem(userAiSettingsKey()) || "{}"),
     };
+    saved.profiles = saved.profiles && typeof saved.profiles === "object" ? saved.profiles : {};
+    if (saved.apiKey && !saved.profiles[saved.provider]) {
+      saved.profiles[saved.provider] = { apiKey: saved.apiKey, model: saved.model };
+    }
+    const active = saved.profiles[saved.provider] || {};
+    saved.apiKey = active.apiKey || saved.apiKey || "";
+    saved.model = active.model || saved.model || getRecommendedAiModel(saved.provider);
+    return saved;
   } catch {
     return defaultUserAiSettings();
   }
+}
+
+function persistUserAiSettings(settings = state.userAiSettings) {
+  const stored = {
+    ...settings,
+    apiKey: "",
+    profiles: Object.fromEntries(Object.entries(settings.profiles || {}).filter(([provider, profile]) => (
+      aiProviderModels[provider] && profile?.apiKey
+    )).map(([provider, profile]) => [provider, {
+      apiKey: String(profile.apiKey || "").trim(),
+      model: profile.model || getRecommendedAiModel(provider),
+    }])),
+  };
+  localStorage.setItem(userAiSettingsKey(), JSON.stringify(stored));
 }
 
 function defaultUserAiSettings() {
   return {
     provider: "openai",
     apiKey: "",
+    model: "gpt-5.4",
+    profiles: {},
+    guideProvider: "greenscan",
+    guideModel: "greenscan",
     verifyUnknownIngredients: true,
     contributeToDatabase: true,
   };
+}
+
+function renderAiProviderProfiles() {
+  if (!els.aiProviderProfileList) return;
+  const labels = { openai: "OpenAI", anthropic: "Anthropic", google: "Google", deepseek: "DeepSeek", zai: "Z.ai" };
+  const saved = Object.entries(state.userAiSettings.profiles || {}).filter(([, profile]) => profile?.apiKey);
+  els.aiProviderProfileList.innerHTML = saved.length
+    ? `<p class="eyebrow">Saved on this device</p>${saved.map(([provider, profile]) => `<div><strong>${escapeHtml(labels[provider] || provider)}</strong><span>${escapeHtml(profile.model || "Recommended model")}</span></div>`).join("")}`
+    : `<p class="ingredient-empty">No personal provider keys saved yet.</p>`;
+}
+
+function getRecommendedAiModel(provider = "openai") {
+  return (aiProviderModels[provider] || aiProviderModels.openai)[0].value;
+}
+
+function getSelectedUserAiModel() {
+  const provider = state.userAiSettings.provider || "openai";
+  const model = state.userAiSettings.model || "";
+  const models = aiProviderModels[provider] || aiProviderModels.openai;
+  return models.some((option) => option.value === model) ? model : getRecommendedAiModel(provider);
+}
+
+function openGuide(options = {}) {
+  if (!state.user?.email) {
+    toast("Sign in with Google to use GreenScan Guide.");
+    loginWithGoogle();
+    return;
+  }
+  if (state.activeView !== "guide") state.guideReturnView = state.activeView || "forYou";
+  if (options.product) state.guideProduct = normalizeRenderableAnalysis(options.product);
+  else state.guideProduct = state.activeView === "scan" && state.currentAnalysis
+    ? normalizeRenderableAnalysis(state.currentAnalysis)
+    : null;
+  renderGuideModelOptions();
+  renderGuideConversation();
+  switchView("guide");
+  if (options.prompt) {
+    els.guideInput.value = options.prompt;
+    window.setTimeout(() => sendGuideMessage(), 50);
+  } else {
+    window.setTimeout(() => els.guideInput?.focus(), 120);
+  }
+}
+
+function closeGuide() {
+  switchView(state.guideReturnView && state.guideReturnView !== "guide" ? state.guideReturnView : "forYou");
+}
+
+function resetGuideChat() {
+  state.guideMessages = [];
+  state.guideProduct = null;
+  renderGuideConversation();
+  els.guideWelcome?.classList.remove("hidden");
+  els.guideInput?.focus();
+}
+
+function renderGuideModelOptions() {
+  if (!els.guideModelSelect) return;
+  const options = [{ provider: "greenscan", model: "greenscan", label: "GreenScan AI - included" }];
+  Object.entries(state.userAiSettings?.profiles || {}).forEach(([provider, profile]) => {
+    if (!profile?.apiKey) return;
+    const models = guideProviderModels[provider] || [];
+    models.forEach((model) => options.push({ provider, model: model.value, label: model.label }));
+  });
+  const selectedProvider = state.userAiSettings?.guideProvider || "greenscan";
+  const selectedModel = state.userAiSettings?.guideModel || "greenscan";
+  els.guideModelSelect.innerHTML = options.map((option) => (
+    `<option value="${escapeHtml(`${option.provider}::${option.model}`)}">${escapeHtml(option.label)}</option>`
+  )).join("");
+  const requested = `${selectedProvider}::${selectedModel}`;
+  els.guideModelSelect.value = options.some((option) => `${option.provider}::${option.model}` === requested)
+    ? requested
+    : "greenscan::greenscan";
+  updateGuideLimitText();
+}
+
+function saveGuideModelChoice() {
+  const [provider, model] = String(els.guideModelSelect?.value || "greenscan::greenscan").split("::");
+  state.userAiSettings = { ...state.userAiSettings, guideProvider: provider, guideModel: model };
+  persistUserAiSettings();
+  updateGuideLimitText();
+}
+
+function updateGuideLimitText() {
+  if (!els.guideLimitText) return;
+  const personal = !String(els.guideModelSelect?.value || "").startsWith("greenscan::");
+  if (personal) {
+    els.guideLimitText.textContent = "Your API key - no Guide daily limit";
+  } else if (state.guideLimit.unlimited) {
+    els.guideLimitText.textContent = "Unlimited Guide access";
+  } else {
+    els.guideLimitText.textContent = `${Math.max(0, Number(state.guideLimit.remaining ?? 8))} prompts left today`;
+  }
+}
+
+function getGuideProductContext() {
+  const product = state.guideProduct;
+  if (!product) return null;
+  const safe = normalizeRenderableAnalysis(product);
+  return {
+    barcode: safe.barcode || "",
+    name: safe.name || "",
+    brand: safe.brand || "",
+    category: safe.category || "",
+    itemCategory: safe.itemCategory || "",
+    safetyScore: Number(safe.safetyScore || 0),
+    summary: String(safe.summary || "").slice(0, 600),
+    ingredients: (safe.ingredients || []).slice(0, 45).map((item) => ({
+      name: item.rawName || item.normalizedName || "",
+      risk: normalizeRisk(item.risk),
+      reason: String(item.reason || "").slice(0, 220),
+    })),
+    nutritionFacts: safe.nutritionFacts || null,
+  };
+}
+
+async function sendGuideMessage(event) {
+  event?.preventDefault?.();
+  if (state.guideBusy) return;
+  if (!state.user?.email) {
+    toast("Sign in with Google to use GreenScan Guide.");
+    return;
+  }
+  const message = String(els.guideInput?.value || "").trim();
+  if (!message) return;
+  const [provider, model] = String(els.guideModelSelect?.value || "greenscan::greenscan").split("::");
+  const profile = provider === "greenscan" ? null : state.userAiSettings?.profiles?.[provider];
+  if (provider !== "greenscan" && !profile?.apiKey) {
+    toast("Add that provider key in AI Provider first.");
+    renderGuideModelOptions();
+    return;
+  }
+  state.guideMessages.push({ role: "user", content: message });
+  state.guideMessages = state.guideMessages.slice(-10);
+  els.guideInput.value = "";
+  els.guideWelcome?.classList.add("hidden");
+  state.guideBusy = true;
+  renderGuideConversation(true);
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/guide/chat`, {
+      method: "POST",
+      headers: await apiHeadersAsync({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        message,
+        messages: state.guideMessages.slice(0, -1),
+        product: getGuideProductContext(),
+        provider: provider === "greenscan" ? "" : provider,
+        model: provider === "greenscan" ? "" : model,
+        userAiKey: profile?.apiKey || "",
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Guide could not respond.");
+    state.guideMessages.push({
+      role: "assistant",
+      content: String(data.answer || "I could not create a useful answer from the available data."),
+      products: Array.isArray(data.products) ? data.products.slice(0, 3) : [],
+    });
+    state.guideMessages = state.guideMessages.slice(-10);
+    if (data.limit) state.guideLimit = { ...state.guideLimit, ...data.limit };
+  } catch (error) {
+    state.guideMessages.push({ role: "assistant", content: error.message || "Guide could not respond. Please try again." });
+  } finally {
+    state.guideBusy = false;
+    renderGuideConversation();
+    updateGuideLimitText();
+  }
+}
+
+function renderGuideConversation(showThinking = false) {
+  if (!els.guideMessages) return;
+  const firstName = String(state.user?.name || "").trim().split(/\s+/)[0];
+  if (els.guideGreeting) els.guideGreeting.textContent = `${firstName ? `Hi ${firstName}.` : "Hi."} What can Guide help you understand?`;
+  const rows = state.guideMessages.map((message) => `
+    <article class="guide-message ${message.role === "user" ? "user" : "assistant"}">
+      <div class="guide-message-label">${message.role === "user" ? "You" : "Guide"}</div>
+      <p>${escapeHtml(message.content || "")}</p>
+      ${Array.isArray(message.products) && message.products.length ? `<div class="guide-product-results">${message.products.map((product) => `
+        <button type="button" data-guide-product="${escapeHtml(product.barcode || "")}">
+          <span><strong>${escapeHtml(product.name || "Product")}</strong><small>${escapeHtml(product.brand || product.itemCategory || "GreenScan listing")}</small></span>
+          <em>${Number(product.safetyScore || 0)}/100</em>
+        </button>
+      `).join("")}</div>` : ""}
+    </article>
+  `).join("");
+  els.guideMessages.innerHTML = rows + (showThinking ? `<article class="guide-message assistant thinking"><div class="guide-message-label">Guide</div><p>Looking at the available GreenScan data...</p></article>` : "");
+  els.guideWelcome?.classList.toggle("hidden", state.guideMessages.length > 0);
+  els.guideMessages.querySelectorAll("[data-guide-product]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const product = await getSharedSavedProduct(button.dataset.guideProduct);
+      if (!product) return toast("That listing is not available right now.");
+      closeGuide();
+      showScannerView();
+      renderResult(product, { skipHistoryRender: true });
+    });
+  });
+  els.guideSendButton.disabled = state.guideBusy;
+  els.guideInput.disabled = state.guideBusy;
+  window.requestAnimationFrame(() => els.guideMessages.scrollTo({ top: els.guideMessages.scrollHeight, behavior: "smooth" }));
 }
 
 function defaultAnalysisEndpoint() {
@@ -6902,12 +7300,14 @@ function renderAdminSummary(data) {
     <article><strong>${Number(data.totalScans || 0)}</strong><span>Total scans</span></article>
     <article><strong>${Number(data.totalAiAnalyses || 0)}</strong><span>AI analyses</span></article>
     <article><strong>${Number(data.savedProducts || 0)}</strong><span>Saved products</span></article>
+    <article><strong>${Number(data.totalGuideResponses || 0)}</strong><span>Guide responses</span></article>
   `;
   els.adminList.innerHTML = (data.admins || [])
     .map((email) => `<div class="admin-row compact-admin-row"><strong>${escapeHtml(email)}</strong><span>Admin</span></div>`)
     .join("") || "<p>No extra admins yet.</p>";
   els.adminList.innerHTML += `
     <div class="admin-row compact-admin-row"><strong>Unlimited access</strong><span>${escapeHtml((data.unlimitedUsers || []).join(", ") || "Only owner")}</span></div>
+    <div class="admin-row compact-admin-row"><strong>Unlimited Guide</strong><span>${escapeHtml((data.guideUnlimitedUsers || []).join(", ") || "None")}</span></div>
     <div class="admin-row compact-admin-row"><strong>Banned users</strong><span>${escapeHtml((data.bannedUsers || []).join(", ") || "None")}</span></div>
   `;
   els.adminUserList.innerHTML = (data.users || [])
@@ -6919,12 +7319,14 @@ function renderAdminSummary(data) {
             <span>${escapeHtml(user.email || user.identity)}</span>
           </div>
           ${user.unlimited ? `<span class="admin-badge">Unlimited</span>` : ""}
+          ${user.guideUnlimited ? `<span class="admin-badge">Guide unlimited</span>` : ""}
           ${user.banned ? `<span class="admin-badge danger">Banned</span>` : ""}
         </div>
         <div class="admin-usage-grid">
           <article><strong>${Number(user.totalScans || 0)}</strong><span>Scans</span><small>${Number(user.scansToday || 0)} today</small></article>
           <article><strong>${Number(user.totalAiAnalyses || 0)}</strong><span>AI</span><small>${Number(user.aiToday || 0)} today</small></article>
           <article><strong>${Number(user.totalSearches || 0)}</strong><span>Searches</span><small>${Number(user.searchesToday || 0)} today</small></article>
+          <article><strong>${Number(user.totalGuideResponses || 0)}</strong><span>Guide</span><small>${Number(user.guideToday || 0)} today</small></article>
           <article><strong>${Number(user.trustScore || 50)}</strong><span>Trust</span><small>${Number(user.acceptedReports || 0)} accepted / ${Number(user.declinedReports || 0)} declined</small></article>
         </div>
         ${user.email ? `<button type="button" class="secondary-button" data-ban-user="${escapeHtml(user.email)}" data-ban-action="${user.banned ? "unban" : "ban"}">${user.banned ? "Unban user" : "Ban user"}</button>` : ""}
@@ -7354,6 +7756,8 @@ function populateAdminLimits(limits) {
   els.limitSearches.value = Number(limits.searches ?? 20);
   els.limitCategoryChecks.value = Number(limits.categoryVerifications ?? 8);
   els.limitImageUploads.value = Number(limits.imageUploads ?? 8);
+  if (els.limitGuidePrompts) els.limitGuidePrompts.value = Number(limits.guidePrompts ?? 8);
+  if (els.limitGuideGlobal) els.limitGuideGlobal.value = Number(limits.guideGlobal ?? 80);
 }
 
 function formatReportIssueType(type) {
@@ -7476,6 +7880,8 @@ async function saveAdminLimits() {
     searches: els.limitSearches.value,
     categoryVerifications: els.limitCategoryChecks.value,
     imageUploads: els.limitImageUploads.value,
+    guidePrompts: els.limitGuidePrompts?.value,
+    guideGlobal: els.limitGuideGlobal?.value,
   };
   els.saveLimitsButton.disabled = true;
   try {
@@ -7537,6 +7943,29 @@ async function grantUnlimitedAccess() {
     toast(error.message || "Could not grant unlimited access.");
   } finally {
     els.grantUnlimitedButton.disabled = false;
+  }
+}
+
+async function updateGuideUnlimitedAccess(action) {
+  const email = String(els.grantGuideUnlimitedEmail?.value || "").trim().toLowerCase();
+  if (!email || !["grant", "revoke"].includes(action)) return;
+  const button = action === "grant" ? els.grantGuideUnlimitedButton : els.revokeGuideUnlimitedButton;
+  button.disabled = true;
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/admin/guide-access`, {
+      method: "POST",
+      headers: await apiHeadersAsync({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ email, action }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not update Guide access.");
+    els.grantGuideUnlimitedEmail.value = "";
+    toast(action === "grant" ? "Unlimited Guide access granted." : "Unlimited Guide access removed.");
+    await loadAdminSummary();
+  } catch (error) {
+    toast(error.message || "Could not update Guide access.");
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -8147,6 +8576,8 @@ function logout() {
   state.isAdmin = false;
   state.accountSyncStarted = false;
   state.userAiSettings = defaultUserAiSettings();
+  state.guideMessages = [];
+  state.guideProduct = null;
   loadPreferencesForCurrentAccount();
   localStorage.removeItem("clearscan.user");
   localStorage.removeItem("clearscan.userProfile");
@@ -8217,6 +8648,8 @@ function updateSearchAccessUi() {
 function getAiProviderLabel(provider) {
   if (provider === "anthropic") return "Anthropic";
   if (provider === "google") return "Google";
+  if (provider === "deepseek") return "DeepSeek";
+  if (provider === "zai") return "Z.ai GLM Vision";
   return "ChatGPT";
 }
 
