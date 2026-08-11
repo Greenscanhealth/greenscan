@@ -360,18 +360,29 @@
               </span>
               <div>
                 <p>GreenScan release</p>
-                <h3 id="landingReleaseTitle">Version 1.0.3</h3>
+                <h3 id="landingReleaseTitle">Version 1.0.4</h3>
               </div>
             </div>
             <div class="landing-release-update">
               <span>Latest update</span>
-              <strong>GreenScan Guide chat, DeepSeek/Z.ai model options, admin Guide limits, and stronger API-key privacy.</strong>
+              <strong>Faster product search, region-aware Guide answers, product cards, and clearer Guide activity timing.</strong>
             </div>
             <div class="landing-service-status" id="landingServiceStatus" role="status" aria-live="polite">
               <span class="landing-service-dot checking" aria-hidden="true"></span>
               <div><strong>Checking GreenScan services...</strong><span>Local OCR helper excluded</span></div>
             </div>
           </section>
+          <button type="button" class="landing-guide-card" id="landingGuideButton">
+            <span class="landing-guide-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H9l-4 3v-3a4 4 0 0 1-2-3.5V9a4 4 0 0 1 2-4Z" /><path d="m15.5 3 .55 1.45L17.5 5l-1.45.55L15.5 7l-.55-1.45L13.5 5l1.45-.55L15.5 3Z" /></svg>
+            </span>
+            <span class="landing-guide-copy">
+              <small>GreenScan Guide</small>
+              <strong>Ask about products and ingredients</strong>
+              <em>Find listings, understand scores, and check your restrictions.</em>
+            </span>
+            <span class="landing-guide-action">Ask Guide <span aria-hidden="true">&rarr;</span></span>
+          </button>
           <section class="landing-features" aria-labelledby="landingFeaturesTitle">
             <div class="landing-section-heading">
               <span>Everything that matters</span>
@@ -506,14 +517,13 @@
         </div>
         <div class="guide-messages" id="guideMessages" aria-live="polite"></div>
         <div class="guide-composer-shell">
-          <div class="guide-model-row">
-            <label for="guideModelSelect">Model</label>
-            <select id="guideModelSelect" aria-label="Guide AI model"></select>
-            <span id="guideLimitText">8 prompts left today</span>
-          </div>
           <form class="guide-composer" id="guideForm">
-            <textarea id="guideInput" rows="1" maxlength="1200" placeholder="Ask about a product, ingredient, or barcode..."></textarea>
-            <button type="submit" class="icon-button submit" id="guideSendButton" aria-label="Send to Guide" title="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-6-8-2Z" /><path d="m12 14 3-3" /></svg></button>
+            <textarea id="guideInput" rows="1" maxlength="1200" placeholder="Ask Guide..."></textarea>
+            <div class="guide-composer-toolbar">
+              <select id="guideModelSelect" aria-label="Guide AI model"></select>
+              <span id="guideLimitText">8 prompts left today</span>
+              <button type="submit" class="icon-button submit" id="guideSendButton" aria-label="Send to Guide" title="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-6-8-2Z" /><path d="m12 14 3-3" /></svg></button>
+            </div>
           </form>
           <p class="guide-disclaimer">Guide provides informational context, not medical advice. Always verify the current package label.</p>
         </div>
@@ -619,6 +629,24 @@
             </label>
             <button type="button" class="secondary-button full" id="copyReferralLinkButton">Copy referral link</button>
           </div>
+        </section>
+        <section class="settings-region-panel" aria-labelledby="productRegionLabel">
+          <div>
+            <p class="eyebrow">Product region</p>
+            <label id="productRegionLabel" for="productRegion"><strong>Where do you usually shop?</strong></label>
+            <small>Guide will prioritize matching regional listings. Always verify the current package because formulas can still vary.</small>
+          </div>
+          <select id="productRegion">
+            <option value="">Ask me when needed</option>
+            <option value="United States">United States</option>
+            <option value="Canada">Canada</option>
+            <option value="United Kingdom">United Kingdom</option>
+            <option value="European Union">European Union</option>
+            <option value="Australia">Australia</option>
+            <option value="New Zealand">New Zealand</option>
+            <option value="India">India</option>
+            <option value="International">Other / International</option>
+          </select>
         </section>
         <div class="settings-menu" aria-label="Settings options">
           <button type="button" class="secondary-button full settings-action" id="aiProviderButton">
@@ -811,7 +839,6 @@
           </button>
         </div>
         <div class="notification-list" id="notificationList"></div>
-        <button type="button" class="secondary-button full" id="clearNotificationsButton">Clear notifications</button>
       </form>
     </dialog>
 
@@ -920,8 +947,8 @@
         </div>
         <div class="source-card">
           <p class="eyebrow">Optional</p>
-          <h3>Use your own AI key</h3>
-          <p>GreenScan provides AI analysis by default. Save separate provider keys on this device, then choose among them in Guide or for label analysis. Keys are never synced to your account or shown to administrators.</p>
+          <h3>Save one favorite AI key</h3>
+          <p>GreenScan provides AI analysis by default. You can save one favorite provider key on this device for Guide and label analysis. It is never synced to your account, sent to administrators, or stored by GreenScan.</p>
         </div>
         <label>
           Provider
@@ -935,7 +962,8 @@
         </label>
         <label>
           API key
-          <input id="userAiKey" type="password" autocomplete="off" placeholder="Paste your API key" />
+          <input id="userAiKey" type="password" autocomplete="off" maxlength="600" spellcheck="false" placeholder="Paste your API key" />
+          <small>Saved only in this browser. Use “Use GreenScan AI” below to remove it.</small>
         </label>
         <div class="ai-provider-options hidden" id="aiProviderAdvancedOptions" aria-label="AI provider options">
           <label>
@@ -958,7 +986,7 @@
             </span>
           </label>
         </div>
-        <button type="button" class="primary-button full" id="saveAiProviderButton">Save AI provider</button>
+        <button type="button" class="primary-button full" id="saveAiProviderButton">Save favorite key</button>
         <button type="button" class="secondary-button full" id="clearAiProviderButton">Use GreenScan AI</button>
         <div class="ai-provider-profile-list" id="aiProviderProfileList" aria-live="polite"></div>
       </form>
@@ -976,6 +1004,17 @@
           </button>
         </div>
         <div class="changelog-list">
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">Version 1.0.4</p>
+            <h3>Faster Guide search and product cards</h3>
+            <ul>
+              <li>Made GreenScan product search faster with a compact saved-product index and short-lived search cache.</li>
+              <li>Improved Guide product lookup so product names, barcodes, and regional matches can find saved and open database listings.</li>
+              <li>Added Guide product cards with score rings, ingredient previews, and safer-alternative suggestions when matching data is available.</li>
+              <li>Added Guide activity labels and a timer so users can see when Guide is thinking or searching products.</li>
+              <li>Improved Guide context so scores, restrictions, avoid-list items, and selected product details stay consistent in follow-up questions.</li>
+            </ul>
+          </article>
           <article class="source-card changelog-entry">
             <p class="eyebrow">Version 1.0.3</p>
             <h3>GreenScan Guide and provider security</h3>

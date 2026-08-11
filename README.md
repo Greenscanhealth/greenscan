@@ -26,6 +26,20 @@ GreenScan is designed to stay useful when a phone temporarily loses internet:
 - Queue entries are deduplicated by barcode, product type, label text, and image fingerprint so the same item is not submitted repeatedly.
 - New AI analysis still requires internet and a configured AI provider/API key.
 
+## GreenScan Guide
+
+GreenScan Guide is the signed-in AI assistant built into GreenScan and co-created with Saz3 Labs. It can:
+
+- Find saved GreenScan products by name or barcode.
+- Explain a product score using the supplied GreenScan listing.
+- Summarize ingredients, nutrition, positives, and potential concerns.
+- Consider the signed-in user's dietary filters and personal avoid list.
+- Help compare products and discuss potentially better-fitting alternatives.
+
+Guide starts a fresh conversation when a different product is selected and does not provide medical advice. Product formulas can change, so users should always verify the current package label, especially for allergies and dietary restrictions.
+
+The hosted app provides a limited number of included Guide prompts. Users may optionally configure one supported AI-provider key on their own device. Personal keys are not synced to the GreenScan account, included in offline queues, or committed to this repository. Self-hosted copies must use their own provider credentials and billing account.
+
 ## Self-Hosting and API Keys
 
 This repository does not include GreenScan production secrets, API keys, credits, or free-trial usage.

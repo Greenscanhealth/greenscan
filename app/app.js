@@ -24,6 +24,7 @@ const state = {
   userAiSettings: loadUserAiSettings(),
   avoidList: loadAvoidList(),
   dietaryFilters: loadDietaryFilters(),
+  productRegion: loadProductRegion(),
   preferencesSyncing: false,
   cameraActive: false,
   analyzing: false,
@@ -50,6 +51,9 @@ const state = {
   ingredientRenderId: 0,
   guideMessages: [],
   guideBusy: false,
+  guideActivityLabel: "Thinking",
+  guideActivityStartedAt: 0,
+  guideActivityTimer: null,
   guideReturnView: "forYou",
   guideProduct: null,
   guideLimit: { limit: 8, remaining: 8, unlimited: false },
@@ -123,12 +127,12 @@ const els = {
   friendlySwapsCard: document.querySelector("#friendlySwapsCard"),
   topMenuButton: document.querySelector("#topMenuButton"),
   guideLaunchButton: document.querySelector("#guideLaunchButton"),
+  landingGuideButton: document.querySelector("#landingGuideButton"),
   topMenu: document.querySelector("#topMenu"),
   notificationButton: document.querySelector("#notificationButton"),
   notificationDot: document.querySelector("#notificationDot"),
   notificationDialog: document.querySelector("#notificationDialog"),
   notificationList: document.querySelector("#notificationList"),
-  clearNotificationsButton: document.querySelector("#clearNotificationsButton"),
   clearNotificationsTopButton: document.querySelector("#clearNotificationsTopButton"),
   adminMenuButton: document.querySelector("#adminMenuButton"),
   settingsButton: document.querySelector("#settingsButton"),
@@ -144,6 +148,7 @@ const els = {
   aiProviderButton: document.querySelector("#aiProviderButton"),
   restrictionsButton: document.querySelector("#restrictionsButton"),
   restrictionsDialog: document.querySelector("#restrictionsDialog"),
+  productRegion: document.querySelector("#productRegion"),
   avoidIngredients: document.querySelector("#avoidIngredients"),
   dietFilters: [...document.querySelectorAll(".diet-filter")],
   saveAvoidListButton: document.querySelector("#saveAvoidListButton"),
@@ -313,7 +318,7 @@ const aiProviderModels = {
 
 const guideProviderModels = {
   greenscan: [
-    { value: "greenscan", label: "GreenScan AI - included" },
+    { value: "greenscan", label: "GreenScan" },
   ],
   openai: [
     { value: "gpt-5.6-luna", label: "Least cost: GPT-5.6 Luna (recommended)" },
@@ -694,6 +699,20 @@ function loadDietaryFilters() {
   }
 }
 
+function loadProductRegion() {
+  try {
+    return normalizeProductRegion(localStorage.getItem(preferenceStorageKey("productRegion")) || "");
+  } catch {
+    return "";
+  }
+}
+
+function normalizeProductRegion(value) {
+  const allowed = ["United States", "Canada", "United Kingdom", "European Union", "Australia", "New Zealand", "India", "International"];
+  const text = String(value || "").trim();
+  return allowed.includes(text) ? text : "";
+}
+
 function preferenceStorageKey(name) {
   let owner = "guest";
   try {
@@ -707,12 +726,26 @@ function preferenceStorageKey(name) {
 function savePreferencesToDevice() {
   localStorage.setItem(preferenceStorageKey("avoidList"), JSON.stringify(state.avoidList));
   localStorage.setItem(preferenceStorageKey("dietaryFilters"), JSON.stringify(state.dietaryFilters));
+  localStorage.setItem(preferenceStorageKey("productRegion"), state.productRegion || "");
 }
 
 function loadPreferencesForCurrentAccount() {
   state.avoidList = loadAvoidList();
   state.dietaryFilters = loadDietaryFilters();
+  state.productRegion = loadProductRegion();
   renderAvoidListSettings();
+  renderProductRegionSetting();
+}
+
+async function saveProductRegion() {
+  state.productRegion = normalizeProductRegion(els.productRegion?.value);
+  savePreferencesToDevice();
+  await saveUserPreferencesToAccount();
+  toast(state.productRegion ? `Product region set to ${state.productRegion}.` : "Guide will ask for a region when needed.");
+}
+
+function renderProductRegionSetting() {
+  if (els.productRegion) els.productRegion.value = state.productRegion || "";
 }
 
 async function saveAvoidListFromSettings() {
@@ -746,11 +779,12 @@ function splitAvoidList(value) {
 function mergeUserPreferences(local, remote) {
   const remoteAvoid = Array.isArray(remote?.avoidList) ? remote.avoidList : [];
   const remoteDiet = Array.isArray(remote?.dietaryFilters) ? remote.dietaryFilters : [];
-  const hasRemote = remoteAvoid.length || remoteDiet.length || remote?.updatedAt;
+  const hasRemote = remoteAvoid.length || remoteDiet.length || remote?.productRegion || remote?.updatedAt;
   const avoidList = hasRemote ? splitAvoidList(remoteAvoid.join(", ")) : splitAvoidList((local.avoidList || []).join(", "));
   const dietaryFiltersSource = hasRemote ? remoteDiet : (local.dietaryFilters || []);
   const dietaryFilters = [...new Set(dietaryFiltersSource.map((item) => String(item || "").trim()).filter(Boolean))].slice(0, 12);
-  return { avoidList, dietaryFilters };
+  const productRegion = hasRemote ? normalizeProductRegion(remote?.productRegion) : normalizeProductRegion(local?.productRegion);
+  return { avoidList, dietaryFilters, productRegion };
 }
 
 async function syncUserPreferences() {
@@ -763,6 +797,7 @@ async function syncUserPreferences() {
     const localPreferences = {
       avoidList: loadAvoidList(),
       dietaryFilters: loadDietaryFilters(),
+      productRegion: loadProductRegion(),
     };
     const merged = mergeUserPreferences(
       localPreferences,
@@ -770,8 +805,10 @@ async function syncUserPreferences() {
     );
     state.avoidList = merged.avoidList;
     state.dietaryFilters = merged.dietaryFilters;
+    state.productRegion = merged.productRegion;
     savePreferencesToDevice();
     renderAvoidListSettings();
+    renderProductRegionSetting();
     await saveUserPreferencesToAccount();
   } catch {
     // Device preferences continue to work when account sync is unavailable.
@@ -789,6 +826,7 @@ async function saveUserPreferencesToAccount() {
       body: JSON.stringify({
         avoidList: state.avoidList,
         dietaryFilters: state.dietaryFilters,
+        productRegion: state.productRegion,
       }),
     });
   } catch {
@@ -886,6 +924,7 @@ els.analyzePhotoButton.addEventListener("click", analyzeCurrentPhoto);
 els.clearHistoryButton.addEventListener("click", clearHistory);
 els.topMenuButton.addEventListener("click", toggleTopMenu);
 els.guideLaunchButton?.addEventListener("click", () => openGuide());
+els.landingGuideButton?.addEventListener("click", () => openGuide());
 els.forYouGuideButton?.addEventListener("click", () => openGuide());
 els.guideCloseButton?.addEventListener("click", closeGuide);
 els.guideNewChatButton?.addEventListener("click", resetGuideChat);
@@ -900,7 +939,6 @@ els.notificationButton.addEventListener("click", () => {
   closeTopMenu();
   openNotifications();
 });
-els.clearNotificationsButton.addEventListener("click", clearNotifications);
 els.clearNotificationsTopButton?.addEventListener("click", clearNotifications);
 els.ingredientSpeakButton?.addEventListener("click", speakActiveIngredient);
 els.ingredientDialog?.addEventListener("close", () => {
@@ -945,6 +983,7 @@ els.themeToggleButton?.addEventListener("click", () => {
 els.googleLoginButton.addEventListener("click", loginWithGoogle);
 els.aiProviderButton.addEventListener("click", openAiProvider);
 els.restrictionsButton.addEventListener("click", openRestrictions);
+els.productRegion?.addEventListener("change", saveProductRegion);
 els.saveAvoidListButton.addEventListener("click", saveAvoidListFromSettings);
 els.saveAiProviderButton.addEventListener("click", saveAiProvider);
 els.clearAiProviderButton.addEventListener("click", clearAiProvider);
@@ -4339,6 +4378,7 @@ function normalizeRenderableAnalysis(analysis) {
   const score = normalizedIngredients.length
     ? calculateScore(normalizedIngredients, { ...analysis, nutritionFacts }, category)
     : providedScore;
+  const scoreChanged = Math.round(providedScore) !== Math.round(score);
   return {
     ...analysis,
     nutritionFacts,
@@ -4349,7 +4389,7 @@ function normalizeRenderableAnalysis(analysis) {
     source: analysis.source || "Ingredient analysis",
     category,
     itemCategory: analysis.itemCategory || analysis.item_category || inferItemCategory(analysis, normalizedIngredients),
-    summary: category === "food" ? buildSummary(score, normalizedIngredients, category) : analysis.summary || buildSummary(score, normalizedIngredients, category),
+    summary: category === "food" || scoreChanged ? buildSummary(score, normalizedIngredients, category) : analysis.summary || buildSummary(score, normalizedIngredients, category),
     positiveNotes: normalizePositiveNotes(analysis.positiveNotes || analysis.positive_notes || []),
   };
 }
@@ -6682,6 +6722,7 @@ function normalizeReferralCode(value) {
 function openSettings() {
   switchView("settings");
   updateAccountUi();
+  renderProductRegionSetting();
   els.settingsDialog.showModal();
   loadReferralStatus();
 }
@@ -6813,8 +6854,7 @@ function saveAiProvider() {
   }
   const provider = els.aiProviderSelect.value;
   const model = els.aiModelSelect?.value || getRecommendedAiModel(provider);
-  const profiles = { ...(state.userAiSettings.profiles || {}) };
-  profiles[provider] = { apiKey, model };
+  const profiles = { [provider]: { apiKey, model } };
   state.userAiSettings = {
     ...state.userAiSettings,
     provider,
@@ -6828,7 +6868,7 @@ function saveAiProvider() {
   els.aiProviderDialog.close();
   updateAccountUi();
   renderGuideModelOptions();
-  toast("AI provider saved.");
+  toast("Favorite AI key saved on this device.");
 }
 
 function clearAiProvider() {
@@ -6859,9 +6899,14 @@ function loadUserAiSettings() {
     if (saved.apiKey && !saved.profiles[saved.provider]) {
       saved.profiles[saved.provider] = { apiKey: saved.apiKey, model: saved.model };
     }
+    if (!saved.profiles[saved.provider]) {
+      const firstSavedProvider = Object.keys(saved.profiles).find((provider) => saved.profiles[provider]?.apiKey);
+      if (firstSavedProvider) saved.provider = firstSavedProvider;
+    }
     const active = saved.profiles[saved.provider] || {};
     saved.apiKey = active.apiKey || saved.apiKey || "";
     saved.model = active.model || saved.model || getRecommendedAiModel(saved.provider);
+    saved.profiles = active.apiKey ? { [saved.provider]: { apiKey: active.apiKey, model: saved.model } } : {};
     return saved;
   } catch {
     return defaultUserAiSettings();
@@ -6869,15 +6914,17 @@ function loadUserAiSettings() {
 }
 
 function persistUserAiSettings(settings = state.userAiSettings) {
+  const favoriteProvider = settings.provider || "openai";
+  const favoriteProfile = settings.profiles?.[favoriteProvider];
   const stored = {
     ...settings,
     apiKey: "",
-    profiles: Object.fromEntries(Object.entries(settings.profiles || {}).filter(([provider, profile]) => (
-      aiProviderModels[provider] && profile?.apiKey
-    )).map(([provider, profile]) => [provider, {
-      apiKey: String(profile.apiKey || "").trim(),
-      model: profile.model || getRecommendedAiModel(provider),
-    }])),
+    profiles: aiProviderModels[favoriteProvider] && favoriteProfile?.apiKey ? {
+      [favoriteProvider]: {
+        apiKey: String(favoriteProfile.apiKey || "").trim(),
+        model: favoriteProfile.model || getRecommendedAiModel(favoriteProvider),
+      },
+    } : {},
   };
   localStorage.setItem(userAiSettingsKey(), JSON.stringify(stored));
 }
@@ -6898,10 +6945,11 @@ function defaultUserAiSettings() {
 function renderAiProviderProfiles() {
   if (!els.aiProviderProfileList) return;
   const labels = { openai: "OpenAI", anthropic: "Anthropic", google: "Google", deepseek: "DeepSeek", zai: "Z.ai" };
-  const saved = Object.entries(state.userAiSettings.profiles || {}).filter(([, profile]) => profile?.apiKey);
-  els.aiProviderProfileList.innerHTML = saved.length
-    ? `<p class="eyebrow">Saved on this device</p>${saved.map(([provider, profile]) => `<div><strong>${escapeHtml(labels[provider] || provider)}</strong><span>${escapeHtml(profile.model || "Recommended model")}</span></div>`).join("")}`
-    : `<p class="ingredient-empty">No personal provider keys saved yet.</p>`;
+  const favoriteProvider = state.userAiSettings.provider || "openai";
+  const favorite = state.userAiSettings.profiles?.[favoriteProvider];
+  els.aiProviderProfileList.innerHTML = favorite?.apiKey
+    ? `<p class="eyebrow">Favorite key saved on this device</p><div><strong>${escapeHtml(labels[favoriteProvider] || favoriteProvider)}</strong><span>${escapeHtml(favorite.model || "Recommended model")}</span></div>`
+    : `<p class="ingredient-empty">No favorite provider key saved yet.</p>`;
 }
 
 function getRecommendedAiModel(provider = "openai") {
@@ -6922,10 +6970,12 @@ function openGuide(options = {}) {
     return;
   }
   if (state.activeView !== "guide") state.guideReturnView = state.activeView || "forYou";
-  if (options.product) state.guideProduct = normalizeRenderableAnalysis(options.product);
-  else state.guideProduct = state.activeView === "scan" && state.currentAnalysis
-    ? normalizeRenderableAnalysis(state.currentAnalysis)
-    : null;
+  const nextProductSource = options.product || (state.activeView === "scan" ? state.currentAnalysis : null);
+  const nextProduct = nextProductSource ? normalizeRenderableAnalysis(nextProductSource) : null;
+  const currentKey = String(state.guideProduct?.barcode || state.guideProduct?.name || "").trim().toLowerCase();
+  const nextKey = String(nextProduct?.barcode || nextProduct?.name || "").trim().toLowerCase();
+  if (currentKey && nextKey && currentKey !== nextKey) state.guideMessages = [];
+  state.guideProduct = nextProduct;
   renderGuideModelOptions();
   renderGuideConversation();
   switchView("guide");
@@ -6942,6 +6992,7 @@ function closeGuide() {
 }
 
 function resetGuideChat() {
+  stopGuideActivity();
   state.guideMessages = [];
   state.guideProduct = null;
   renderGuideConversation();
@@ -6951,11 +7002,16 @@ function resetGuideChat() {
 
 function renderGuideModelOptions() {
   if (!els.guideModelSelect) return;
-  const options = [{ provider: "greenscan", model: "greenscan", label: "GreenScan AI - included" }];
+  const providerLabels = { openai: "OpenAI", anthropic: "Claude", google: "Gemini", deepseek: "DeepSeek", zai: "Z.ai" };
+  const options = [{ provider: "greenscan", model: "greenscan", label: "GreenScan" }];
   Object.entries(state.userAiSettings?.profiles || {}).forEach(([provider, profile]) => {
     if (!profile?.apiKey) return;
     const models = guideProviderModels[provider] || [];
-    models.forEach((model) => options.push({ provider, model: model.value, label: model.label }));
+    models.forEach((model) => options.push({
+      provider,
+      model: model.value,
+      label: `${providerLabels[provider] || provider}: ${model.label.replace(/^(Least cost|Balanced|Best quality|Reasoning):\s*/i, "")}`,
+    }));
   });
   const selectedProvider = state.userAiSettings?.guideProvider || "greenscan";
   const selectedModel = state.userAiSettings?.guideModel || "greenscan";
@@ -7018,6 +7074,10 @@ async function sendGuideMessage(event) {
   }
   const message = String(els.guideInput?.value || "").trim();
   if (!message) return;
+  if (state.guideMessages.length && isNewGuideProductRequest(message)) {
+    state.guideMessages = [];
+    state.guideProduct = null;
+  }
   const [provider, model] = String(els.guideModelSelect?.value || "greenscan::greenscan").split("::");
   const profile = provider === "greenscan" ? null : state.userAiSettings?.profiles?.[provider];
   if (provider !== "greenscan" && !profile?.apiKey) {
@@ -7030,6 +7090,7 @@ async function sendGuideMessage(event) {
   els.guideInput.value = "";
   els.guideWelcome?.classList.add("hidden");
   state.guideBusy = true;
+  startGuideActivity(message);
   renderGuideConversation(true);
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/guide/chat`, {
@@ -7046,52 +7107,186 @@ async function sendGuideMessage(event) {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Guide could not respond.");
+    const responseProducts = Array.isArray(data.products) ? data.products.slice(0, 3) : [];
+    if (!state.guideProduct && responseProducts[0]?.barcode) {
+      state.guideProduct = normalizeRenderableAnalysis(responseProducts[0]);
+    }
     state.guideMessages.push({
       role: "assistant",
       content: String(data.answer || "I could not create a useful answer from the available data."),
-      products: Array.isArray(data.products) ? data.products.slice(0, 3) : [],
+      products: responseProducts,
     });
     state.guideMessages = state.guideMessages.slice(-10);
     if (data.limit) state.guideLimit = { ...state.guideLimit, ...data.limit };
   } catch (error) {
     state.guideMessages.push({ role: "assistant", content: error.message || "Guide could not respond. Please try again." });
   } finally {
+    stopGuideActivity();
     state.guideBusy = false;
     renderGuideConversation();
     updateGuideLimitText();
   }
 }
 
+function startGuideActivity(message) {
+  stopGuideActivity();
+  const text = String(message || "").toLowerCase();
+  const searching = /\b(find|search|look up|lookup|recommend|alternative|alternatives|swap|swaps|barcode|product)\b/.test(text) || /\b\d{6,14}\b/.test(text);
+  state.guideActivityLabel = searching ? "Searching products" : "Thinking";
+  state.guideActivityStartedAt = Date.now();
+  state.guideActivityTimer = window.setInterval(updateGuideActivityClock, 1000);
+}
+
+function stopGuideActivity() {
+  if (state.guideActivityTimer) window.clearInterval(state.guideActivityTimer);
+  state.guideActivityTimer = null;
+}
+
+function updateGuideActivityClock() {
+  const clock = els.guideMessages?.querySelector("[data-guide-activity-clock]");
+  if (!clock || !state.guideActivityStartedAt) return;
+  const totalSeconds = Math.max(0, Math.floor((Date.now() - state.guideActivityStartedAt) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  clock.textContent = `${minutes}:${seconds}`;
+}
+
+function isNewGuideProductRequest(message) {
+  const text = String(message || "").trim().toLowerCase();
+  if (/\b\d{6,14}\b/.test(text)) return true;
+  if (/\b(alternative|alternatives|swap|swaps|similar|safer)\b/.test(text)) return false;
+  if (/^(find|find me|search|search for|look up|lookup|show me)\b/.test(text)) return true;
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 9 || /[?]/.test(text)) return false;
+  if (/^(what|why|how|can|could|should|does|do|is|are|tell|explain|compare)\b/.test(text)) return false;
+  const followUpTerms = new Set(["ingredients", "ingredient", "score", "deodorant", "antiperspirant", "soap", "shampoo", "conditioner", "lotion", "cream", "food", "drink"]);
+  if (words.every((word) => followUpTerms.has(word))) return false;
+  const currentName = String(state.guideProduct?.name || "").toLowerCase();
+  return !currentName || !words.every((word) => currentName.includes(word));
+}
+
 function renderGuideConversation(showThinking = false) {
   if (!els.guideMessages) return;
+  const renderedGuideProducts = [];
   const firstName = String(state.user?.name || "").trim().split(/\s+/)[0];
   if (els.guideGreeting) els.guideGreeting.textContent = `${firstName ? `Hi ${firstName}.` : "Hi."} What can Guide help you understand?`;
+  const contextProduct = state.guideProduct && (state.guideMessages.length || showThinking)
+    ? normalizeRenderableAnalysis(state.guideProduct)
+    : null;
+  const contextScore = contextProduct
+    ? Math.max(0, Math.min(100, Math.round(Number(contextProduct.safetyScore || 0))))
+    : 0;
+  const contextHasScore = contextProduct?.hasGreenScanScore !== false && Number.isFinite(Number(contextProduct?.safetyScore ?? contextProduct?.safety_score));
+  const contextCard = contextProduct ? `
+    <article class="guide-context-card" aria-label="Product selected for this Guide conversation">
+      ${contextProduct.imageUrl
+        ? `<img src="${escapeHtml(contextProduct.imageUrl)}" alt="${escapeHtml(contextProduct.name || "Selected product")}" loading="lazy" decoding="async" />`
+        : `<span class="guide-context-placeholder" aria-hidden="true">${escapeHtml(String(contextProduct.name || "G").charAt(0).toUpperCase())}</span>`}
+      <div class="guide-context-copy">
+        <span>Selected product</span>
+        <strong>${escapeHtml(contextProduct.name || "GreenScan product")}</strong>
+        <small>${escapeHtml([contextProduct.brand, contextProduct.itemCategory || contextProduct.category].filter(Boolean).join(" - ") || "GreenScan listing")}</small>
+      </div>
+      ${contextHasScore
+        ? `<span class="guide-context-score ${scoreColor(contextScore)}" style="--score-value:${contextScore}" aria-label="GreenScan score ${contextScore} out of 100">${contextScore}</span>`
+        : `<span class="guide-context-unrated">Unrated</span>`}
+      <button type="button" data-guide-view-ingredients>View ingredients</button>
+    </article>
+  ` : "";
   const rows = state.guideMessages.map((message) => `
     <article class="guide-message ${message.role === "user" ? "user" : "assistant"}">
       <div class="guide-message-label">${message.role === "user" ? "You" : "Guide"}</div>
-      <p>${escapeHtml(message.content || "")}</p>
-      ${Array.isArray(message.products) && message.products.length ? `<div class="guide-product-results">${message.products.map((product) => `
-        <button type="button" data-guide-product="${escapeHtml(product.barcode || "")}">
-          <span><strong>${escapeHtml(product.name || "Product")}</strong><small>${escapeHtml(product.brand || product.itemCategory || "GreenScan listing")}</small></span>
-          <em>${Number(product.safetyScore || 0)}/100</em>
-        </button>
-      `).join("")}</div>` : ""}
+      <div class="guide-message-content">${renderGuideMessageContent(message.content || "")}</div>
+      ${Array.isArray(message.products) && message.products.length ? `<div class="guide-product-results">${message.products.map((product) => {
+        const productIndex = renderedGuideProducts.push(product) - 1;
+        const score = Math.max(0, Math.min(100, Math.round(Number(product.safetyScore || 0))));
+        const hasScore = product.hasGreenScanScore !== false && Number.isFinite(Number(product.safetyScore ?? product.safety_score));
+        const ingredients = getGuideIngredientPreview(product);
+        const selected = String(product.barcode || "") === String(state.guideProduct?.barcode || "");
+        return `
+          <button type="button" data-guide-product="${escapeHtml(product.barcode || "")}" data-guide-product-index="${productIndex}">
+            <span class="guide-product-copy">
+              <small class="guide-product-label">${product.externalSource ? `${escapeHtml(product.externalSource)} listing` : (selected ? "Selected product" : "Possible alternative")}${product.searchConfidence ? ` · ${escapeHtml(product.searchConfidence)}` : ""}</small>
+              <strong>${escapeHtml(product.name || "Product")}</strong>
+              <small>${escapeHtml(product.brand || product.itemCategory || "GreenScan listing")}</small>
+              <small class="guide-product-ingredients">${ingredients.length ? `Ingredients: ${escapeHtml(ingredients.join(", "))}` : "Ingredient preview unavailable"}</small>
+            </span>
+            ${hasScore
+              ? `<span class="guide-product-score ${scoreColor(score)}" style="--score-value:${score}" aria-label="GreenScan score ${score} out of 100">${score}</span>`
+              : `<span class="guide-product-unrated">Unrated</span>`}
+          </button>`;
+      }).join("")}</div>` : ""}
     </article>
   `).join("");
-  els.guideMessages.innerHTML = rows + (showThinking ? `<article class="guide-message assistant thinking"><div class="guide-message-label">Guide</div><p>Looking at the available GreenScan data...</p></article>` : "");
+  const activitySeconds = state.guideActivityStartedAt ? Math.max(0, Math.floor((Date.now() - state.guideActivityStartedAt) / 1000)) : 0;
+  const activityClock = `${Math.floor(activitySeconds / 60)}:${String(activitySeconds % 60).padStart(2, "0")}`;
+  els.guideMessages.innerHTML = contextCard + rows + (showThinking ? `
+    <article class="guide-message assistant thinking" aria-live="polite" aria-label="Guide is working">
+      <span class="guide-activity-spinner" aria-hidden="true"></span>
+      <span class="guide-activity-copy"><strong>${escapeHtml(state.guideActivityLabel)}...</strong><small>${state.guideActivityLabel === "Searching products" ? "Checking GreenScan and open product databases" : "Reviewing the available product information"}</small></span>
+      <span class="guide-activity-clock"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><time data-guide-activity-clock>${activityClock}</time></span>
+    </article>` : "");
   els.guideWelcome?.classList.toggle("hidden", state.guideMessages.length > 0);
+  els.guideMessages.querySelector("[data-guide-view-ingredients]")?.addEventListener("click", async () => {
+    let product = state.guideProduct;
+    if (product?.externalSource && product?.barcode) {
+      closeGuide();
+      showScannerView();
+      await lookupBarcode(product.barcode);
+      return;
+    }
+    if (product?.barcode) product = await getSharedSavedProduct(product.barcode) || product;
+    if (!product) return toast("That listing is not available right now.");
+    closeGuide();
+    showScannerView();
+    renderResult(product, { skipHistoryRender: true });
+    setResultSheetExpanded(true);
+    const toggle = els.resultPanel.querySelector(".all-ingredients-toggle");
+    if (toggle?.getAttribute("aria-expanded") !== "true") toggle?.click();
+    window.setTimeout(() => scrollToResultSection(".all-ingredients-section"), 100);
+  });
   els.guideMessages.querySelectorAll("[data-guide-product]").forEach((button) => {
     button.addEventListener("click", async () => {
-      const product = await getSharedSavedProduct(button.dataset.guideProduct);
+      const barcode = button.dataset.guideProduct;
+      const attachedProduct = renderedGuideProducts[Number(button.dataset.guideProductIndex)];
+      if (attachedProduct?.externalSource && barcode) {
+        closeGuide();
+        showScannerView();
+        await lookupBarcode(barcode);
+        return;
+      }
+      const localProduct = barcode
+        ? getSavedProduct(barcode) || getKnownLocalProducts().find((item) => String(item.barcode || "") === barcode)
+        : null;
+      const product = (barcode ? await getSharedSavedProduct(barcode) : null) || localProduct || attachedProduct;
       if (!product) return toast("That listing is not available right now.");
       closeGuide();
       showScannerView();
-      renderResult(product, { skipHistoryRender: true });
+      renderResult(normalizeRenderableAnalysis(product), { skipHistoryRender: true });
     });
   });
   els.guideSendButton.disabled = state.guideBusy;
   els.guideInput.disabled = state.guideBusy;
   window.requestAnimationFrame(() => els.guideMessages.scrollTo({ top: els.guideMessages.scrollHeight, behavior: "smooth" }));
+}
+
+function getGuideIngredientPreview(product) {
+  if (!Array.isArray(product?.ingredients)) return [];
+  return product.ingredients.map((item) => {
+    if (typeof item === "string") return item;
+    return item?.rawName || item?.normalizedName || item?.name || "";
+  }).map((name) => String(name).trim()).filter(Boolean).slice(0, 5);
+}
+
+function renderGuideMessageContent(value) {
+  const escaped = escapeHtml(String(value || "")).replace(/\*\*([^*\n]{1,240})\*\*/g, "<strong>$1</strong>");
+  return escaped.split(/\n{2,}/).map((block) => {
+    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (lines.length && lines.every((line) => /^-\s+/.test(line))) {
+      return `<ul>${lines.map((line) => `<li>${line.replace(/^-\s+/, "")}</li>`).join("")}</ul>`;
+    }
+    return `<p>${lines.join("<br>")}</p>`;
+  }).join("");
 }
 
 function defaultAnalysisEndpoint() {
