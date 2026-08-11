@@ -9,3 +9,6 @@ directory = "./app"
 pattern = "www.greenscan.us/*"
 zone_name = "greenscan.us"
 
+[[routes]]
+pattern = "greenscan.us/*"
+zone_name = "greenscan.us"
