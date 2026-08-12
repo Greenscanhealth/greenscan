@@ -2697,18 +2697,21 @@ dialog::backdrop {
   padding: 16px;
 }
 
-#sourcesDialog {
+#sourcesDialog,
+#guideInfoDialog {
   width: min(calc(100vw - 24px), 520px);
 }
 
-#sourcesDialog .sources-form {
+#sourcesDialog .sources-form,
+#guideInfoDialog .sources-form {
   max-height: min(86dvh, 740px);
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-#sourcesDialog .section-heading {
+#sourcesDialog .section-heading,
+#guideInfoDialog .section-heading {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -2778,6 +2781,59 @@ dialog::backdrop {
   color: var(--muted);
   font-size: 0.86rem;
   line-height: 1.4;
+}
+
+.guide-settings-status {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(95, 238, 183, 0.24);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(90, 240, 193, 0.16), transparent 35%),
+    rgba(255, 255, 255, 0.045);
+}
+
+.guide-settings-status h3,
+.guide-settings-status p {
+  margin: 0;
+}
+
+.guide-settings-status h3 {
+  color: #f4fff8;
+  font-size: 1.05rem;
+}
+
+.guide-settings-status p {
+  color: #b6c9c0;
+  font-weight: 800;
+}
+
+.guide-usage-bar {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.guide-usage-bar span {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5eeecb, #27d889);
+  transition: width 180ms ease;
+}
+
+.guide-settings-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-action.guide-disabled,
+.guide-nav-item.guide-disabled {
+  opacity: 0.64;
 }
 
 .changelog-list {
@@ -6082,6 +6138,10 @@ body.theme-dark .bottom-nav {
 
 /* Premium desktop navigation: expanded by default, compact on demand. */
 @media (min-width: 1100px) {
+  .topbar .guide-launch-button {
+    display: none;
+  }
+
   body,
   body.scan-view {
     --desktop-nav-width: 226px;
@@ -9089,6 +9149,33 @@ body:not(.scan-view) .history-panel.for-you-panel {
   }
 }
 
+/* Desktop scan layout: keep the scanner from covering the description card below. */
+@media (min-width: 1100px) {
+  body.scan-view .app-shell {
+    grid-template-rows: auto auto auto auto;
+    align-items: start;
+  }
+
+  body.scan-view .scan-panel {
+    min-height: 0;
+  }
+
+  body.scan-view .scanner-viewport {
+    height: clamp(430px, 54dvh, 560px);
+    min-height: 0;
+  }
+
+  body.scan-view .result-panel {
+    min-height: clamp(430px, 54dvh, 560px);
+  }
+
+  body.scan-view .app-description-panel {
+    position: relative;
+    z-index: 0;
+    margin-top: 0;
+  }
+}
+
 /* Mobile scanner polish: clean frame and keep product preview clear of controls. */
 @media (max-width: 720px) {
   body.scan-view .scanner-viewport {
@@ -9692,6 +9779,183 @@ body:not(.scan-view) .history-panel.for-you-panel {
   display: none;
 }
 
+.settings-intro {
+  margin: -4px 0 2px;
+  color: #abc2b8;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.appearance-choice-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.appearance-choice,
+.appearance-prompt-choice {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(151, 246, 207, 0.18);
+  border-radius: 18px;
+  color: #f4fff8;
+  text-align: left;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(92, 255, 185, 0.12), transparent 28%),
+    rgba(255, 255, 255, 0.045);
+}
+
+.appearance-choice.recommended,
+.appearance-prompt-choice.recommended {
+  border-color: rgba(86, 234, 198, 0.58);
+  box-shadow: inset 4px 0 0 #56ead6;
+}
+
+.appearance-choice input {
+  width: 20px;
+  height: 20px;
+  margin: 3px 0 0;
+  accent-color: #56ead6;
+}
+
+.appearance-choice span,
+.appearance-prompt-choice {
+  min-width: 0;
+}
+
+.appearance-choice small,
+.appearance-prompt-choice small {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 7px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #94f4e8;
+  background: rgba(86, 234, 214, 0.1);
+  font-size: 0.72rem;
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.appearance-choice strong,
+.appearance-prompt-choice strong {
+  display: block;
+  color: #f6fff9;
+  font-size: 1.08rem;
+}
+
+.appearance-choice em,
+.appearance-prompt-choice span {
+  display: block;
+  margin-top: 5px;
+  color: #abc2b8;
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.appearance-prompt-dialog {
+  width: min(calc(100vw - 28px), 640px);
+}
+
+.appearance-prompt-hero {
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  border: 1px solid rgba(86, 234, 214, 0.26);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 82% 18%, rgba(86, 234, 214, 0.22), transparent 32%),
+    linear-gradient(145deg, rgba(18, 75, 51, 0.88), rgba(8, 30, 20, 0.96));
+}
+
+.appearance-prompt-mark {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 18px;
+  color: #56ead6;
+  background: rgba(86, 234, 214, 0.11);
+}
+
+.appearance-prompt-mark svg {
+  width: 28px;
+  height: 28px;
+}
+
+.appearance-prompt-hero h2,
+.appearance-prompt-hero p {
+  margin: 0;
+}
+
+.appearance-prompt-hero h2 {
+  color: #f7fff9;
+}
+
+.appearance-prompt-hero p:not(.eyebrow) {
+  color: #b5cbc1;
+  font-weight: 780;
+  line-height: 1.45;
+}
+
+.prompt-choice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.appearance-prompt-choice {
+  grid-template-columns: 1fr;
+  min-height: 150px;
+  cursor: pointer;
+}
+
+body.simple-mode .guide-launch-button,
+body.simple-mode #landingGuideButton,
+body.simple-mode #forYouGuideButton,
+body.simple-mode #guideSettingsButton,
+body.simple-mode #navGuideButton,
+body.simple-mode #navSourcesButton,
+body.simple-mode .product-guide-card,
+body.simple-mode .compare-card,
+body.simple-mode .data-quality-card,
+body.simple-mode .change-log-card,
+body.simple-mode .country-formula-card,
+body.simple-mode .country-markets,
+body.simple-mode .formula-change-grid {
+  display: none !important;
+}
+
+body.simple-mode .bottom-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body.simple-mode .friendly-home-panel > .friendly-home-heading,
+body.simple-mode .friendly-dashboard-metrics,
+body.simple-mode .friendly-nutrition-card,
+body.simple-mode .friendly-swaps-card {
+  display: none !important;
+}
+
+body.simple-mode .friendly-recent-heading {
+  margin-top: 0;
+  padding: 4px 0 0;
+}
+
+body.simple-mode .friendly-recent-heading h2::before {
+  content: "History";
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .settings-action-icon {
   display: grid;
   width: 44px;
@@ -9816,6 +10080,18 @@ body:not(.scan-view) .history-panel.for-you-panel {
     height: 40px;
     flex-basis: 40px;
     border-radius: 13px;
+  }
+
+  .prompt-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .appearance-prompt-hero {
+    padding: 18px;
+  }
+
+  .appearance-prompt-choice {
+    min-height: 124px;
   }
 }
 
@@ -10308,6 +10584,165 @@ body.search-view .recent-search-chip {
   line-height: 1.3;
 }
 
+.guide-welcome.tool-open {
+  align-self: stretch;
+  justify-items: stretch;
+}
+
+.guide-welcome.tool-open > :not(.guide-tool-panel) {
+  display: none;
+}
+
+.guide-tool-panel {
+  display: grid;
+  width: min(100%, 900px);
+  min-height: 0;
+  margin: auto;
+  gap: 18px;
+  padding: 22px;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.2);
+}
+
+.guide-tool-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.guide-tool-heading h3,
+.guide-tool-heading p {
+  margin: 0;
+}
+
+.guide-tool-heading h3 {
+  margin-top: 3px;
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
+}
+
+.guide-tool-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 10px;
+}
+
+.guide-tool-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--wash);
+}
+
+.guide-tool-search .submit {
+  width: 48px;
+  height: 48px;
+  color: var(--surface);
+  background: var(--accent-strong);
+}
+
+.guide-tool-section {
+  display: grid;
+  gap: 10px;
+}
+
+.guide-tool-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.guide-tool-section-title small {
+  color: var(--muted);
+}
+
+.guide-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.guide-picker-product {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--wash);
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.guide-picker-product:hover,
+.guide-picker-product:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--green-bg) 78%, var(--surface));
+  transform: translateY(-1px);
+}
+
+.guide-picker-product img {
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  object-fit: cover;
+  background: var(--surface);
+}
+
+.guide-picker-product > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.guide-picker-product strong,
+.guide-picker-product small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide-picker-product small,
+.guide-picker-empty {
+  color: var(--muted);
+}
+
+.guide-picker-product > b {
+  display: grid;
+  min-width: 42px;
+  height: 42px;
+  padding: 0 7px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: .82rem;
+}
+
+.guide-picker-product > b.green { color: var(--green); }
+.guide-picker-product > b.yellow { color: var(--yellow); }
+.guide-picker-product > b.orange { color: var(--orange); }
+.guide-picker-product > b.red { color: var(--red); }
+
+.guide-picker-empty {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  text-align: center;
+}
+
 .guide-suggestions,
 .product-guide-actions {
   display: flex;
@@ -10581,6 +11016,345 @@ body.search-view .recent-search-chip {
   margin-top: 12px;
 }
 
+.guide-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.guide-action-row button {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 42px;
+  padding: 10px 14px;
+}
+
+.guide-action-row button:hover,
+.guide-action-row button:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+/* Focused scanner entry: GreenScan opens as a scanner, not a dashboard. */
+body.scan-view .app-description-panel,
+body.scan-view .free-share-panel,
+body.scan-view .signin-prompt-panel,
+body.scan-view .onboarding-panel,
+body.scan-view .scan-streak-panel,
+body.scan-view .discovery-panel,
+body.scan-view .status-panel,
+body.scan-view .home-screen-panel,
+body.scan-view .phone-qr-panel {
+  display: none !important;
+}
+
+@media (min-width: 1000px) {
+  body.scan-view {
+    overflow-x: clip;
+  }
+
+  body.scan-view .app-shell {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 0 0 44px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "topbar"
+      "scan"
+      "fallback";
+    gap: 0;
+  }
+
+  body.scan-view .topbar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: var(--desktop-nav-width, 0px);
+    z-index: 34;
+    min-height: 74px;
+    padding: 16px 28px;
+    border: 0;
+    background: linear-gradient(180deg, rgba(3, 18, 12, 0.92), rgba(3, 18, 12, 0));
+  }
+
+  body.scan-view .scan-panel {
+    width: 100%;
+    min-height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #061911;
+    box-shadow: none;
+  }
+
+  body.scan-view .scanner-viewport {
+    height: 100dvh;
+    min-height: 720px;
+    border: 0;
+    border-radius: 0;
+  }
+
+  body.scan-view .scanner-heading {
+    top: 116px;
+    right: 24px;
+    left: 24px;
+    text-align: center;
+  }
+
+  body.scan-view .scan-frame {
+    top: 24%;
+    right: 22%;
+    left: 22%;
+    width: 56%;
+    height: 35%;
+  }
+
+  body.scan-view .camera-tools {
+    top: 96px;
+    right: 30px;
+  }
+
+  body.scan-view .scan-product-preview {
+    right: max(28px, 8vw);
+    bottom: 204px;
+    left: max(28px, 8vw);
+    width: auto;
+  }
+
+  body.scan-view .controls-grid {
+    right: max(28px, 12vw);
+    bottom: 114px;
+    left: max(28px, 12vw);
+    z-index: 8;
+  }
+
+  body.scan-view .barcode-form {
+    right: max(28px, 12vw);
+    bottom: 28px;
+    left: max(28px, 12vw);
+    z-index: 9;
+  }
+
+  body.scan-view .fallback-panel:not(.hidden) {
+    width: min(100% - 56px, 760px);
+    margin: -28px auto 72px;
+    position: relative;
+    z-index: 10;
+  }
+}
+
+/* Mobile scan focus: keep the camera clear and leave only manual barcode entry below it. */
+@media (max-width: 720px) {
+  body.scan-view .app-description-panel,
+  body.scan-view .free-share-panel,
+  body.scan-view .signin-prompt-panel,
+  body.scan-view .onboarding-panel,
+  body.scan-view .scan-streak-panel,
+  body.scan-view .discovery-panel,
+  body.scan-view .status-panel,
+  body.scan-view .home-screen-panel,
+  body.scan-view .phone-qr-panel,
+  body.scan-view .result-panel:not(.has-result),
+  body.scan-view .permission-callout {
+    display: none !important;
+  }
+
+  body.scan-view .scanner-heading,
+  body.scan-view .scan-assist {
+    display: none !important;
+  }
+
+  body.scan-view.camera-active .controls-grid {
+    display: none !important;
+  }
+
+  body.scan-view .barcode-form {
+    right: 18px;
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
+    left: 18px;
+    z-index: 12;
+    padding: 0;
+    background: transparent;
+  }
+
+  body.scan-view .barcode-form label {
+    color: rgba(235, 255, 246, 0.92);
+  }
+
+  body.scan-view .barcode-form .input-row {
+    background: rgba(2, 13, 8, 0.78);
+    border-radius: 12px;
+  }
+
+  body.scan-view.camera-active {
+    background: #000;
+  }
+
+  body.scan-view.camera-active .app-shell {
+    padding-bottom: 0;
+  }
+
+  body.scan-view.camera-active .topbar {
+    display: none !important;
+  }
+
+  body.scan-view.camera-active .scan-panel {
+    height: 100dvh;
+    min-height: 100dvh;
+    background: #000;
+  }
+
+  body.scan-view.camera-active .scanner-viewport {
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    background: #000;
+  }
+
+  body.scan-view.camera-active .scanner-viewport::before {
+    background:
+      linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 20%, transparent 70%, rgba(0, 0, 0, 0.24));
+  }
+
+  body.scan-view.camera-active .scan-frame {
+    top: 32%;
+    right: 7%;
+    left: 7%;
+    width: 86%;
+    height: 34%;
+    z-index: 4;
+  }
+
+  body.scan-view.camera-active .scan-frame::after {
+    display: none;
+  }
+
+  body.scan-view.camera-active .scan-frame span {
+    width: 52px;
+    height: 52px;
+    border-color: rgba(255, 255, 255, 0.96);
+    border-radius: 0;
+    filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.32));
+  }
+
+  body.scan-view.camera-active .scan-frame span:nth-child(1) {
+    border-width: 6px 0 0 6px;
+    border-top-left-radius: 22px;
+  }
+
+  body.scan-view.camera-active .scan-frame span:nth-child(2) {
+    border-width: 6px 6px 0 0;
+    border-top-right-radius: 22px;
+  }
+
+  body.scan-view.camera-active .scan-frame span:nth-child(3) {
+    border-width: 0 6px 6px 0;
+    border-bottom-right-radius: 22px;
+  }
+
+  body.scan-view.camera-active .scan-frame span:nth-child(4) {
+    border-width: 0 0 6px 6px;
+    border-bottom-left-radius: 22px;
+  }
+
+  body.scan-view.camera-active .camera-tools {
+    position: fixed;
+    top: calc(72px + env(safe-area-inset-top, 0px));
+    right: 24px;
+    left: 24px;
+    z-index: 20;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  body.scan-view.camera-active .camera-tool-button {
+    width: 68px;
+    height: 68px;
+    border: 0;
+    border-radius: 50%;
+    color: #08110d;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(16px);
+    pointer-events: auto;
+  }
+
+  body.scan-view.camera-active .camera-tool-button svg {
+    width: 30px;
+    height: 30px;
+    stroke-width: 2.6;
+  }
+
+  body.scan-view.camera-active .sound-toggle {
+    order: 2;
+  }
+
+  body.scan-view.camera-active .torch-toggle {
+    order: 1;
+  }
+
+  body.scan-view.camera-active .scanner-empty,
+  body.scan-view.camera-active .barcode-form {
+    display: none !important;
+  }
+
+  body.scan-view.camera-active .bottom-nav {
+    right: 18px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    left: 18px;
+    z-index: 24;
+    width: auto;
+    max-width: none;
+    height: 82px;
+    padding: 7px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 247, 238, 0.94);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(18px);
+  }
+
+  body.scan-view.camera-active .bottom-nav .nav-item {
+    min-height: 68px;
+    padding: 7px 6px;
+    border-radius: 999px;
+    color: rgba(4, 18, 12, 0.76);
+    background: transparent;
+  }
+
+  body.scan-view.camera-active .bottom-nav .nav-item svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  body.scan-view.camera-active .bottom-nav .nav-item span {
+    font-size: 0.68rem;
+    color: currentColor;
+  }
+
+  body.scan-view.camera-active .bottom-nav .nav-item.active {
+    color: #36b878;
+    background: rgba(5, 18, 12, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(54, 184, 120, 0.08);
+  }
+
+  body.scan-view.camera-active .bottom-nav .nav-item::after {
+    display: none;
+  }
+}
+
 .guide-product-results button {
   display: grid;
   align-items: center;
@@ -10770,6 +11544,12 @@ body.search-view .recent-search-chip {
   border-bottom: 1px solid var(--line);
 }
 
+@media (min-width: 721px) {
+  #guideInfoDialog {
+    width: min(calc(100vw - 48px), 680px);
+  }
+}
+
 .ai-provider-profile-list span {
   color: var(--muted);
   text-align: right;
@@ -10777,6 +11557,12 @@ body.search-view .recent-search-chip {
 
 .bottom-nav.guide-nav-hidden {
   display: none !important;
+}
+
+@media (max-width: 1099px) {
+  .bottom-nav .guide-nav-item {
+    display: none !important;
+  }
 }
 
 @media (max-width: 720px) {
@@ -10822,10 +11608,35 @@ body.search-view .recent-search-chip {
     width: 100%;
   }
 
+  .guide-welcome.tool-open {
+    padding: max(12px, env(safe-area-inset-top)) 14px 10px;
+  }
+
+  .guide-tool-panel {
+    width: 100%;
+    margin: 0;
+    padding: 16px;
+    gap: 14px;
+    border-radius: 16px;
+  }
+
+  .guide-picker-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-picker-product {
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+  }
+
+  .guide-picker-product img {
+    width: 46px;
+    height: 46px;
+  }
+
   .guide-welcome {
     align-self: center;
     gap: 16px;
-    padding: 18px 22px 14px;
+    padding: 18px 22px calc(172px + env(safe-area-inset-bottom));
   }
 
   .guide-hero-copy h2 {
@@ -10880,10 +11691,19 @@ body.search-view .recent-search-chip {
   }
 
   .guide-composer-shell {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
     width: 100%;
     max-width: 100vw;
-    padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    padding: 10px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     overflow: hidden;
+    border-top: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--wash) 82%, transparent), var(--wash));
+    box-shadow: 0 -20px 46px rgba(0, 0, 0, 0.32);
   }
 
   .guide-disclaimer {
@@ -10892,8 +11712,52 @@ body.search-view .recent-search-chip {
     line-height: 1.3;
   }
 
+  .guide-messages {
+    padding-inline: 18px;
+    padding-bottom: calc(178px + env(safe-area-inset-bottom));
+  }
+
   .guide-message {
-    max-width: 88%;
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 14px;
+    padding: 16px 18px;
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+  }
+
+  .guide-message.user {
+    width: fit-content;
+    max-width: 82%;
+    margin-left: auto;
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+
+  .guide-message-label {
+    margin-bottom: 8px;
+    font-size: .7rem;
+    letter-spacing: .04em;
+  }
+
+  .guide-message-content {
+    gap: 12px;
+  }
+
+  .guide-message p {
+    color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+    font-size: .98rem;
+    line-height: 1.42;
+  }
+
+  .guide-message-content strong {
+    color: var(--ink);
+    font-weight: 780;
+  }
+
+  .guide-message-content ul {
+    gap: 7px;
+    padding-left: 17px;
   }
 
   .guide-context-card {
@@ -10916,9 +11780,11 @@ body.search-view .recent-search-chip {
   }
 
   .guide-composer textarea {
-    min-height: 36px;
-    padding-block: 5px;
+    min-height: 42px;
+    max-height: 86px;
+    padding: 9px 10px;
     font-size: 1rem;
+    line-height: 1.25;
   }
 
   .guide-composer-toolbar {
@@ -10938,17 +11804,30 @@ body.search-view .recent-search-chip {
 @media (min-width: 721px) {
   body.guide-view .app-shell {
     display: block;
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    padding: 0;
   }
 
   .guide-panel {
-    height: min(820px, calc(100dvh - 36px));
-    min-height: 680px;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .guide-welcome {
     align-self: center;
-    gap: 18px;
-    padding: 30px clamp(34px, 5vw, 62px);
+    width: min(100%, 1240px);
+    margin-inline: auto;
+    gap: 22px;
+    padding: clamp(30px, 4vw, 58px) clamp(34px, 6vw, 86px);
   }
 
   .guide-orb {
@@ -10956,27 +11835,230 @@ body.search-view .recent-search-chip {
   }
 
   .guide-hero-copy h2 {
-    font-size: clamp(2rem, 3vw, 2.55rem);
+    font-size: clamp(2.25rem, 4vw, 3.35rem);
   }
 
   .guide-hero-copy > p:last-child {
-    max-width: 560px;
+    max-width: 680px;
     margin-inline: auto;
   }
 
   .guide-intro-grid {
-    width: min(100%, 700px);
-    gap: 12px;
+    width: min(100%, 980px);
+    gap: 16px;
   }
 
   .guide-intro-grid button {
-    min-height: 82px;
-    padding: 14px 16px;
+    min-height: 96px;
+    padding: 18px 20px;
   }
 
   .guide-composer-shell {
-    max-width: 760px;
+    width: min(100%, 980px);
+    max-width: none;
     margin: 0 auto;
+  }
+}
+
+@media (min-width: 1100px) {
+  .bottom-nav.guide-nav-hidden {
+    display: flex !important;
+  }
+
+  body.guide-view {
+    padding-left: var(--desktop-nav-width);
+    background:
+      radial-gradient(circle at 75% 20%, rgba(79, 209, 197, 0.09), transparent 34rem),
+      radial-gradient(circle at 18% 34%, rgba(36, 176, 120, 0.12), transparent 32rem),
+      linear-gradient(145deg, #04150e 0%, #071b13 52%, #06150f 100%);
+    overflow: hidden;
+  }
+
+  body.guide-view .app-shell {
+    position: fixed;
+    inset: 0 0 0 var(--desktop-nav-width);
+    width: auto;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.guide-view .topbar {
+    position: fixed;
+    top: 18px;
+    right: 22px;
+    z-index: 12;
+    display: block;
+    width: auto;
+    padding: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  body.guide-view .topbar .brand-lockup,
+  body.guide-view .topbar .guide-launch-button {
+    display: none;
+  }
+
+  body.guide-view .topbar .top-actions {
+    pointer-events: auto;
+  }
+
+  body.desktop-nav-collapsed.guide-view .app-shell {
+    inset-left: var(--desktop-nav-width);
+  }
+
+  body.guide-view .guide-header {
+    position: fixed;
+    top: 18px;
+    right: 96px;
+    z-index: 13;
+    width: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  body.guide-view .guide-title-lockup,
+  body.guide-view #guideLearnButton {
+    display: none;
+  }
+
+  body.guide-view .guide-header-actions {
+    gap: 10px;
+  }
+
+  body.guide-view #guideNewChatButton {
+    display: inline-grid;
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    backdrop-filter: blur(16px);
+  }
+
+  body.guide-view .guide-panel {
+    height: 100%;
+    grid-template-rows: minmax(0, 1fr) auto;
+    background: transparent;
+  }
+
+  body.guide-view .guide-orb {
+    display: grid;
+    width: clamp(112px, 9vw, 146px);
+  }
+
+  body.guide-view .guide-hero-copy {
+    display: block;
+  }
+
+  body.guide-view .guide-welcome {
+    grid-row: 1;
+    align-self: center;
+    width: min(100%, 1100px);
+    min-height: 0;
+    gap: clamp(18px, 2.4vh, 26px);
+    padding: 70px clamp(24px, 4vw, 62px) 24px;
+    overflow: hidden;
+  }
+
+  body.guide-view .guide-messages {
+    grid-row: 1;
+    width: min(100%, 1100px);
+    margin-inline: auto;
+    padding-top: 86px;
+    padding-bottom: 28px;
+    overflow-y: auto;
+  }
+
+  body.guide-view .guide-context-card {
+    width: min(100%, 760px);
+    margin: 0 auto 20px;
+  }
+
+  body.guide-view .guide-message {
+    width: min(100%, 760px);
+    max-width: min(100%, 760px);
+    margin-right: auto;
+    margin-left: auto;
+    padding: 18px 20px;
+    border-radius: 14px;
+  }
+
+  body.guide-view .guide-message.user {
+    width: fit-content;
+    min-width: min(220px, 100%);
+    max-width: min(58%, 560px);
+    margin-right: calc((100% - min(100%, 760px)) / 2);
+    margin-left: auto;
+  }
+
+  body.guide-view .guide-message.assistant {
+    margin-left: calc((100% - min(100%, 760px)) / 2);
+  }
+
+  body.guide-view .guide-message.thinking {
+    width: min(100%, 520px);
+    max-width: min(100%, 520px);
+  }
+
+  body.guide-view .guide-message p {
+    overflow-wrap: break-word;
+  }
+
+  body.guide-view .guide-product-results button {
+    min-height: 112px;
+  }
+
+  body.guide-view .guide-intro-grid {
+    width: min(100%, 980px);
+    gap: 14px;
+  }
+
+  body.guide-view .guide-intro-grid button {
+    min-height: 92px;
+    padding: 16px 18px;
+    background: color-mix(in srgb, var(--surface) 76%, transparent);
+    box-shadow: none;
+  }
+
+  body.guide-view .guide-composer-shell {
+    grid-row: 2;
+    width: min(calc(100% - 48px), 980px);
+    margin: 0 auto;
+    padding: 0 0 24px;
+    border-top: 0;
+    background: none !important;
+    box-shadow: none;
+  }
+
+  body.guide-view .guide-composer {
+    padding: 10px 10px 8px 18px;
+    border-color: color-mix(in srgb, #aab1ad 38%, transparent);
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(43, 47, 45, 0.96), rgba(24, 28, 26, 0.98));
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(18px);
+  }
+
+  body.guide-view .guide-composer textarea {
+    color: #f4f6f5;
+  }
+
+  body.guide-view .guide-composer textarea::placeholder,
+  body.guide-view .guide-disclaimer {
+    color: #aab1ad;
+  }
+
+  body.guide-view .guide-disclaimer {
+    margin: 8px 14px 0;
+  }
+
+  body.guide-view .bottom-nav {
+    background:
+      linear-gradient(180deg, rgba(4, 22, 15, 0.92), rgba(4, 22, 15, 0.84));
+    box-shadow: 20px 0 48px rgba(0, 0, 0, 0.1);
   }
 }
 

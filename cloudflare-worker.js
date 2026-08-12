@@ -1030,10 +1030,30 @@ export default {
         ? await env.PRODUCT_CACHE.get(suppliedProduct.barcode, "json")
         : null;
       const resolvedProduct = mergeGuideProductSnapshot(storedProduct, suppliedProduct);
-      const productMatches = await findGuideProductMatches(env, message, resolvedProduct, preferences);
+      const history = sanitizeGuideMessages(body.messages);
+      const productMatches = await findGuideProductMatches(env, message, resolvedProduct, preferences, history);
+      if (resolvedProduct?.barcode) {
+        await maybeCreateGuideSuggestedRepair(env, {
+          product: resolvedProduct,
+          storedProduct,
+          suppliedProduct,
+          user: verifiedUser,
+        });
+      }
       for (const product of productMatches) {
         const matchedBarcode = cleanBarcode(product?.barcode);
         if (matchedBarcode) await addQueueItem(env, "product-barcodes", matchedBarcode);
+      }
+      if (!productMatches.length && isGuideProductDiscoveryRequest(message)) {
+        return json({
+          ok: true,
+          answer: buildGuideNoMatchAnswer(message),
+          products: [],
+          actions: buildGuideNoMatchActions(message),
+          modelLabel: "GreenScan product search",
+          limit: guideLimitPayload(usage),
+          noProductMatch: true,
+        }, 200, headers);
       }
       if (shouldGuideAskUserToChooseProduct(message, resolvedProduct, productMatches)) {
         return json({
@@ -1045,7 +1065,6 @@ export default {
           needsProductChoice: true,
         }, 200, headers);
       }
-      const history = sanitizeGuideMessages(body.messages);
       if (!usingUserAi && (isGuideProductDiscoveryRequest(message) || shouldUseAdvancedGuideModel(message, resolvedProduct, productMatches))) {
         model = "gpt-5.4";
       }
@@ -1070,7 +1089,7 @@ export default {
       const nextUsage = usingUserAi ? usage : { ...usage, count: usage.count + 1 };
       return json({
         ok: true,
-        answer: sanitizeGuideText(completion.content, 5000),
+        answer: sanitizeGuideText(completion.content, 9000),
         products: productMatches.slice(0, 3).map(compactSearchAnalysis),
         modelLabel: getAiSourceLabel(usingUserAi ? provider : "openai", model),
         limit: guideLimitPayload(nextUsage),
@@ -1090,6 +1109,7 @@ export default {
       const usingUserAi = Boolean(userAiProvider && userAiKey);
       const userAiVerifyUnknownIngredients = body.userAiVerifyUnknownIngredients !== false;
       const allowSharedDatabaseContribution = body.allowSharedDatabaseContribution !== false;
+      const allowAiRepairSuggestions = body.allowAiRepairSuggestions !== false;
       if (!usingUserAi && !env.OPENAI_API_KEY) return json({ error: "AI analysis is not configured yet." }, 500, headers);
       let frontImage = cleanImageUrl(body.frontImage);
       let backImage = cleanImageUrl(body.backImage);
@@ -1357,7 +1377,7 @@ export default {
       const databaseQuality = evaluateAiDatabaseSaveQuality(analysis, { productType });
       analysis.database_quality = databaseQuality;
       let suggestedRepair = null;
-      if (barcode && existingProductForPrompt && allowSharedDatabaseContribution) {
+      if (barcode && existingProductForPrompt && allowAiRepairSuggestions) {
         suggestedRepair = await maybeCreateAiSuggestedRepair(env, {
           barcode,
           original: existingProductForPrompt,
@@ -1404,7 +1424,9 @@ export default {
           ? existingProductForPrompt
             ? suggestedRepair
               ? ["Existing saved listing was not overwritten. AI suggested repair is waiting for admin review."]
-              : ["Saved listing already exists and no strong AI repair suggestion was created."]
+              : allowAiRepairSuggestions
+                ? ["Saved listing already exists and no strong AI repair suggestion was created."]
+                : ["Saved listing already exists. AI repair suggestions are turned off for this provider."]
             : databaseQuality.reasons
           : ["Shared database contribution is turned off for this AI provider."];
       }
@@ -1459,16 +1481,26 @@ function isAllowedOrigin(origin, env) {
 function mergeGuideProductSnapshot(storedProduct, suppliedProduct) {
   if (!storedProduct) return suppliedProduct || null;
   if (!suppliedProduct) return storedProduct;
+  const mergedIngredients = suppliedProduct.ingredients?.length ? suppliedProduct.ingredients : storedProduct.ingredients;
+  const canonicalScore = getCanonicalGuideScore({
+    ...storedProduct,
+    ...suppliedProduct,
+    ingredients: mergedIngredients,
+    hasGreenScanScore: suppliedProduct.hasGreenScanScore !== false,
+  });
   return {
     ...storedProduct,
     ...suppliedProduct,
     barcode: cleanBarcode(storedProduct.barcode || suppliedProduct.barcode),
     name: sanitizeGuideText(storedProduct.name || storedProduct.detected_product_name || suppliedProduct.name, 160),
     brand: sanitizeGuideText(storedProduct.brand || storedProduct.detected_brand || suppliedProduct.brand, 120),
-    ingredients: suppliedProduct.ingredients?.length ? suppliedProduct.ingredients : storedProduct.ingredients,
+    ingredients: mergedIngredients,
     nutritionFacts: suppliedProduct.nutritionFacts || storedProduct.nutritionFacts || storedProduct.nutrition_facts || null,
-    safetyScore: suppliedProduct.hasGreenScanScore ? suppliedProduct.safetyScore : storedProduct.safetyScore ?? storedProduct.safety_score,
-    hasGreenScanScore: suppliedProduct.hasGreenScanScore !== false,
+    ...(Number.isFinite(canonicalScore) ? {
+      safetyScore: canonicalScore,
+      scoreColor: scoreColorFromScore(canonicalScore),
+    } : {}),
+    hasGreenScanScore: suppliedProduct.hasGreenScanScore !== false && Number.isFinite(canonicalScore),
     currentDisplaySnapshot: true,
   };
 }
@@ -1561,7 +1593,14 @@ function normalizeDeprecatedModel(provider, model) {
 
 function normalizeIngredientTextTypos(value) {
   return String(value || "")
-    .replace(/\bispartame\b/gi, "aspartame");
+    .replace(/\bispartame\b/gi, "aspartame")
+    .replace(/\bputassium\b/gi, "potassium")
+    .replace(/\bpotassium\s+oleste\b/gi, "potassium oleate")
+    .replace(/\bpriso(?:dium|diurn)\b/gi, "trisodium")
+    .replace(/\btrisodium\s+dicarboxymeth(?:yl)?\b/gi, "trisodium dicarboxymethyl alaninate")
+    .replace(/\bsaccharide\s+lomerate\b/gi, "saccharide isomerate")
+    .replace(/\bethylnexylglycerin\b/gi, "ethylhexylglycerin")
+    .replace(/\bhydroxypropyl\s+guar\s+hydro\b/gi, "hydroxypropyl guar hydroxypropyltrimonium chloride");
 }
 
 const NON_INGREDIENT_SECTION_STOP = "\\b(?:(?:drug|nutrition|supplement) facts|purpose|uses?|warnings?|directions?|questions?|other information|serving size|calories|%\\s*daily value|(?:contains|may contain)\\s*:?\\s*(?:milk|eggs?|fish|shellfish|tree nuts?|peanuts?|wheat|soybeans?|sesame)\\b|allergen(?:s)?|produced in|made in (?:a )?facility|distributed by|dist\\. by|manufactured by|mfd\\. by|marketed by|packaged by|copyright|trademark|phone|call|contact us|questions or comments|website|www\\.|https?://|\\.com\\b|catch us|follow us|connect with|facebook|instagram|twitter|x\\.com|tiktok|@|scan|barcode|upc|qr code|recycling|recyclable|recycle|dispose|storage|store in|keep in|best before|best by|sell by|use by|expiration|exp\\.?|lot|batch|net wt|net weight|contents|package|packaging|for external use|keep out of reach|when using|do not use|stop use|ask a doctor|if swallowed|get medical help|poison control|active ingredient[s]?\\s*$|inactive ingredient[s]?\\s*$|vegan|cruelty[- ]?free|paraben[- ]?free|aluminum[- ]?free|dermatologist tested|clinically proven|certified|certification|not tested on animals|no artificial|gluten[- ]?free|non[- ]?gmo|plant[- ]?based)\\b";
@@ -1944,45 +1983,113 @@ async function runGoogleAnalysis(apiKey, model, messages) {
 
 async function runGuideCompletion({ provider, apiKey, model, systemPrompt, history, message }) {
   const messages = [...history, { role: "user", content: message }];
+  const continuePrompt = "Continue the previous GreenScan Guide answer from exactly where it stopped. Do not restart or repeat earlier text. If it ended mid-sentence, complete that sentence first. Finish with a complete short verdict and end with punctuation.";
+  const shouldContinueGuideAnswer = (result) => result?.ok && result.content && (result.stoppedEarly || guideAnswerLooksIncomplete(result.content));
+  const appendGuideContinuations = async (first, requestFn, assistantRole, maxTokens, maxAttempts = 2) => {
+    let current = first;
+    let conversation = [...messages];
+    for (let attempt = 0; attempt < maxAttempts && shouldContinueGuideAnswer(current); attempt += 1) {
+      conversation = [
+        ...conversation,
+        { role: assistantRole, content: current.content },
+        { role: "user", content: continuePrompt },
+      ];
+      const continued = await requestFn(conversation, maxTokens);
+      const addition = continued?.ok ? String(continued.content || "").trim() : "";
+      if (!addition) break;
+      current = {
+        ...continued,
+        content: `${current.content.trim()}\n\n${addition}`,
+        stoppedEarly: Boolean(continued.stoppedEarly),
+      };
+      conversation = [
+        ...messages,
+        { role: assistantRole, content: current.content },
+      ];
+    }
+    return current;
+  };
   if (provider === "anthropic") {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: 650, temperature: 0.2, system: systemPrompt, messages }),
-    });
-    const data = await safeJson(response);
-    if (!response.ok) return providerError(data, response.status, "Claude Guide request failed.");
-    return { ok: true, content: data.content?.find((part) => part.type === "text")?.text || "" };
+    const requestAnthropic = async (nextMessages, maxTokens = 1400) => {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: JSON.stringify({ model, max_tokens: maxTokens, temperature: 0.2, system: systemPrompt, messages: nextMessages }),
+      });
+      const data = await safeJson(response);
+      if (!response.ok) return providerError(data, response.status, "Claude Guide request failed.");
+      return {
+        ok: true,
+        content: data.content?.filter((part) => part.type === "text").map((part) => part.text || "").join("") || "",
+        stoppedEarly: data.stop_reason === "max_tokens",
+      };
+    };
+    const first = await requestAnthropic(messages);
+    return appendGuideContinuations(first, requestAnthropic, "assistant", 1000);
   }
   if (provider === "google") {
-    const contents = messages.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] }));
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, generationConfig: { temperature: 0.2, maxOutputTokens: 650 }, contents }),
-    });
-    const data = await safeJson(response);
-    if (!response.ok) return providerError(data, response.status, "Gemini Guide request failed.");
-    return { ok: true, content: data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "" };
+    const toGoogleContents = (items) => items.map((item) => ({ role: item.role === "assistant" ? "model" : "user", parts: [{ text: item.content }] }));
+    const requestGoogle = async (nextMessages, maxTokens = 3200) => {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: systemPrompt }] }, generationConfig: { temperature: 0.2, maxOutputTokens: maxTokens }, contents: toGoogleContents(nextMessages) }),
+      });
+      const data = await safeJson(response);
+      if (!response.ok) return providerError(data, response.status, "Gemini Guide request failed.");
+      const candidate = data.candidates?.[0] || {};
+      return {
+        ok: true,
+        content: candidate.content?.parts?.map((part) => part.text || "").join("") || "",
+        stoppedEarly: /MAX|TOKEN|LENGTH/i.test(String(candidate.finishReason || "")),
+      };
+    };
+    const first = await requestGoogle(messages);
+    return appendGuideContinuations(first, requestGoogle, "assistant", 2200, 3);
   }
   const endpoint = provider === "deepseek"
     ? "https://api.deepseek.com/chat/completions"
     : provider === "zai"
       ? "https://api.z.ai/api/paas/v4/chat/completions"
       : "https://api.openai.com/v1/chat/completions";
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-      ...(provider === "openai" ? { max_completion_tokens: 650 } : { temperature: 0.2, max_tokens: 650 }),
-      ...(provider === "zai" ? { thinking: { type: "disabled" } } : {}),
-    }),
-  });
-  const data = await safeJson(response);
-  if (!response.ok) return providerError(data, response.status, provider === "deepseek" ? "DeepSeek Guide request failed." : "Guide request failed.");
-  return { ok: true, content: data.choices?.[0]?.message?.content || data.data?.choices?.[0]?.message?.content || "" };
+  const requestChatCompletion = async (nextMessages, maxTokens = 1400) => {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: systemPrompt }, ...nextMessages],
+        ...(provider === "openai" ? { max_completion_tokens: maxTokens } : { temperature: 0.2, max_tokens: maxTokens }),
+        ...(provider === "zai" ? { thinking: { type: "disabled" } } : {}),
+      }),
+    });
+    const data = await safeJson(response);
+    if (!response.ok) return providerError(data, response.status, provider === "deepseek" ? "DeepSeek Guide request failed." : "Guide request failed.");
+    const choice = data.choices?.[0] || data.data?.choices?.[0] || {};
+    return {
+      ok: true,
+      content: choice.message?.content || "",
+      stoppedEarly: choice.finish_reason === "length" || choice.finish_reason === "max_tokens",
+    };
+  };
+  const first = await requestChatCompletion(messages);
+  return appendGuideContinuations(first, requestChatCompletion, "assistant", 1000);
+}
+
+function guideAnswerLooksIncomplete(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  if (text.length < 90) return false;
+  const tail = text.slice(-180).trim();
+  if (/[,;:—-]\s*$/.test(tail)) return true;
+  if (/\(\s*(?:e\.g\.|for example)?\s*,?\s*$/i.test(tail)) return true;
+  if (/\b(e\.g\.|for example|such as|including|like)\s*,?\s*$/i.test(tail)) return true;
+  if ((tail.match(/\(/g) || []).length > (tail.match(/\)/g) || []).length) return true;
+  if ((tail.match(/\[/g) || []).length > (tail.match(/\]/g) || []).length) return true;
+  if (/[.!?)]["')\]]?$/.test(tail)) return false;
+  if (/\b(and|or|with|without|for|from|to|of|the|a|an|based|because|including|against|using|available|GreenScan data)$/i.test(tail)) return true;
+  const lastBreak = Math.max(tail.lastIndexOf("."), tail.lastIndexOf("!"), tail.lastIndexOf("?"));
+  return lastBreak < 0 && tail.split(/\s+/).length >= 10;
 }
 
 function sanitizeGuideText(value, limit = 1200) {
@@ -1999,14 +2106,18 @@ function sanitizeGuideMessages(value) {
 
 function sanitizeGuideProduct(value) {
   if (!value || typeof value !== "object") return null;
-  const hasGreenScanScore = value.hasGreenScanScore !== false && Number.isFinite(Number(value.safetyScore ?? value.safety_score));
+  const canonicalScore = getCanonicalGuideScore(value);
+  const hasGreenScanScore = value.hasGreenScanScore !== false && Number.isFinite(canonicalScore);
   return {
     barcode: cleanBarcode(value.barcode),
     name: sanitizeGuideText(value.name, 160),
     brand: sanitizeGuideText(value.brand, 120),
     category: sanitizeGuideText(value.category, 40),
     itemCategory: sanitizeGuideText(value.itemCategory, 80),
-    ...(hasGreenScanScore ? { safetyScore: clampNumber(value.safetyScore ?? value.safety_score, 0, 100) } : {}),
+    ...(hasGreenScanScore ? {
+      safetyScore: canonicalScore,
+      scoreColor: scoreColorFromScore(canonicalScore),
+    } : {}),
     hasGreenScanScore,
     externalSource: sanitizeGuideText(value.externalSource, 60),
     countries: sanitizeGuideText(value.countries, 300),
@@ -2040,7 +2151,9 @@ function buildGuideSystemPrompt({ firstName, preferences, product, productMatche
     "Do not diagnose, prescribe, promise safety, or replace medical advice. For allergies and serious health questions, tell the user to verify the current package and consult a qualified professional.",
     "Never invent a product, ingredient, score, or source. If the supplied GreenScan data is missing, say so.",
     "Open Food Facts and Open Beauty Facts matches are discovery records, not verified GreenScan scores. You may discuss their supplied label text, but never state or imply a GreenScan score unless hasGreenScanScore is true.",
+    "Guide can use the GreenScan and open-product search results supplied in CONTEXT. Do not say you lack lookup/search when matchingProducts are present; if matchingProducts is empty after a lookup request, say no matching listing was found.",
     "Do not call a product a better alternative unless it has a verified GreenScan score, enough ingredient data, and no known conflict with the user's restrictions.",
+    "Never mention internal field names such as safetyScore, safety_score, scoreColor, product_category, or raw JSON inconsistencies to the user. If product data looks inconsistent, use the canonical currentProduct or matchingProducts score shown in CONTEXT and say the listing may need review.",
     "If a listing has only one or two ingredients, a suspiciously incomplete ingredient list, or no GreenScan score, describe it as an unverified discovery match and ask the user to verify the package label.",
     "When matchingProducts contains one clear product match, answer the user's product-name query with a concise overview based on that listing.",
     "When matchingProducts contains multiple products with the same family name but different types or formulas, explain that distinction and ask the user to choose the relevant product card instead of mixing their ingredients.",
@@ -2067,6 +2180,8 @@ function shouldUseAdvancedGuideModel(message, product, productMatches = []) {
 
 function isGuideProductDiscoveryRequest(message) {
   const text = normalizeSearchText(message);
+  if (isGuideFollowUpLookupRequest(text)) return true;
+  if (extractGuideDirectLookupQuery(message)) return true;
   if (/\d{6,14}/.test(text)) return true;
   if (/\b(find|search|lookup|recommend|alternative|alternatives|swap|swaps|product|score|ingredient|ingredients|tell me about)\b/.test(text)) return true;
   const words = text.split(" ").filter(Boolean);
@@ -2075,8 +2190,81 @@ function isGuideProductDiscoveryRequest(message) {
   return /\b(body wash|bodywash|deodorant|antiperspirant|shampoo|conditioner|lotion|cream|soap|chips|drink|soda|snack|bar|spray|gel|stick)\b/.test(text) || words.length >= 3;
 }
 
+function isGuideFollowUpLookupRequest(message) {
+  const text = normalizeSearchText(message);
+  if (!text) return false;
+  if (/\b(search|look up|lookup|find|check|try|use)\b.*\b(it|that|this|one|product|listing)\b/.test(text)) return true;
+  if (/\b(can'?t|couldn'?t|can|could)\s+(you\s+)?(?:search|look up|lookup|find|check)\b/.test(text)) return true;
+  return /^(search|look up|lookup|find|check|try again|search again|look again)$/.test(text);
+}
+
+function inferGuideFollowUpLookupQuery(message, history = [], currentProduct = null) {
+  if (!isGuideFollowUpLookupRequest(message)) return "";
+  const currentLabel = normalizeSearchText([
+    currentProduct?.brand,
+    currentProduct?.name,
+    currentProduct?.itemCategory || currentProduct?.category,
+  ].filter(Boolean).join(" "));
+  if (currentLabel) return currentLabel;
+  const recentUserMessages = Array.isArray(history)
+    ? history.filter((item) => item?.role !== "assistant").slice(-6).reverse()
+    : [];
+  for (const item of recentUserMessages) {
+    const candidate = extractGuideLookupCandidate(item?.content || "");
+    if (candidate) return candidate;
+  }
+  return "";
+}
+
+function extractGuideLookupCandidate(value) {
+  let text = normalizeSearchText(value);
+  if (!text || isGuideFollowUpLookupRequest(text)) return "";
+  text = text
+    .replace(/\b(can you|could you|please|i want|i need|help me|tell me|show me|find me|find|search for|search|look up|lookup|check|score|summary|summarize|ingredients|ingredient|against|my|dietary|restrictions|personal|avoid|list|saved|preferences|what|whats|what's|which|for|about|the|a|an)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = text.split(" ").filter(Boolean);
+  if (words.length < 2 || words.length > 10) return "";
+  const generic = new Set(["product", "products", "deodorant", "body", "wash", "bodywash", "shampoo", "conditioner", "lotion", "cream", "food", "drink", "snack"]);
+  if (words.every((word) => generic.has(word))) return "";
+  return text;
+}
+
+function extractGuideDirectLookupQuery(message) {
+  const original = String(message || "");
+  const text = normalizeSearchText(original);
+  if (!text || isGuideFollowUpLookupRequest(text)) return "";
+  const hasBarcode = /\b\d{6,14}\b/.test(text);
+  const hasLookupIntent = /\b(find|search|lookup|look up|show|score|summary|summarize|tell me about|what is|what's|check)\b/.test(text);
+  const hasProductType = /\b(body wash|bodywash|deodorant|antiperspirant|shampoo|conditioner|lotion|cream|soap|chips|drink|soda|snack|bar|spray|gel|stick|serum|cleanser|moisturizer)\b/.test(text);
+  const words = text.split(" ").filter(Boolean);
+  const brandLike = words.length >= 3 && words.length <= 12 && words.some((word) => word.length >= 4);
+  if (!hasBarcode && !hasProductType && !(hasLookupIntent && brandLike)) return "";
+  const candidate = extractGuideLookupCandidate(text);
+  if (!candidate) return "";
+  const candidateWords = candidate.split(" ").filter(Boolean);
+  const generic = new Set(["have", "has", "with", "without", "pork", "dyes", "dye", "safe", "bad", "good", "better", "option", "options"]);
+  if (candidateWords.length < 2 || candidateWords.every((word) => generic.has(word))) return "";
+  return candidate;
+}
+
+function guideQueryTargetsCurrentProduct(query, currentProduct) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery || !currentProduct) return false;
+  const currentText = normalizeSearchText([
+    currentProduct.brand,
+    currentProduct.name,
+    currentProduct.itemCategory || currentProduct.category,
+  ].filter(Boolean).join(" "));
+  if (!currentText) return false;
+  const tokens = normalizedQuery.split(" ").filter((word) => word.length >= 3);
+  if (!tokens.length) return false;
+  return tokens.every((word) => currentText.includes(word));
+}
+
 function shouldGuideAskUserToChooseProduct(message, currentProduct, productMatches = []) {
-  if (currentProduct?.name || currentProduct?.barcode) return false;
+  const directQuery = extractGuideDirectLookupQuery(message);
+  if ((currentProduct?.name || currentProduct?.barcode) && (!directQuery || guideQueryTargetsCurrentProduct(directQuery, currentProduct))) return false;
   if (!isGuideProductDiscoveryRequest(message)) return false;
   const matches = productMatches.filter((product) => product?.name || product?.detected_product_name);
   if (matches.length < 2) return false;
@@ -2103,15 +2291,37 @@ function buildGuideChooseProductAnswer(productMatches = []) {
   ].join("\n\n");
 }
 
-async function findGuideProductMatches(env, message, currentProduct, preferences = {}) {
+function buildGuideNoMatchAnswer(message) {
+  const query = extractGuideDirectLookupQuery(message) || normalizeSearchText(message);
+  return [
+    "I could not find a verified GreenScan listing or an open-database discovery match for that product yet.",
+    query ? `Search tried: ${query}` : "",
+    "You can still help GreenScan check it by adding the barcode or a clear label photo. If it matches later, Guide can use that saved listing.",
+  ].filter(Boolean).join("\n\n");
+}
+
+function buildGuideNoMatchActions(message) {
+  const query = extractGuideDirectLookupQuery(message) || normalizeSearchText(message);
+  return [
+    { type: "guide-search", label: "Try another search", value: query },
+    { type: "barcode", label: "Enter barcode", value: "" },
+    { type: "label-photo", label: "Add label photo", value: "" },
+  ];
+}
+
+async function findGuideProductMatches(env, message, currentProduct, preferences = {}, history = []) {
   const products = [];
   const isProductTypeRefinement = Boolean(currentProduct) && /^(deodorant|antiperspirant|body wash|bar soap|soap|shampoo|conditioner|lotion|cream|serum|food|drink|snack)$/i.test(String(message || "").trim());
   const plainQuery = normalizeSearchText(message);
+  const followUpLookupQuery = inferGuideFollowUpLookupQuery(message, history, currentProduct);
+  const directLookupQuery = extractGuideDirectLookupQuery(message);
   const plainWords = plainQuery.split(" ").filter(Boolean);
   const looksLikeBareProductName = plainWords.length >= 2 && plainWords.length <= 10 && !/^(why|how|can|could|should|does|do|are|is|what|which|when|where|tell|explain|compare)\b/i.test(String(message).trim());
   const currentName = normalizeSearchText(currentProduct?.name || "");
   const isNewBareProduct = looksLikeBareProductName && (!currentName || !plainWords.every((word) => currentName.includes(word)));
-  if (!isProductTypeRefinement && !isNewBareProduct && (currentProduct?.name || currentProduct?.barcode)) products.push(currentProduct);
+  const directQueryIsCurrentProduct = directLookupQuery && guideQueryTargetsCurrentProduct(directLookupQuery, currentProduct);
+  if (!isProductTypeRefinement && !directLookupQuery && !isNewBareProduct && (currentProduct?.name || currentProduct?.barcode)) products.push(currentProduct);
+  if (directQueryIsCurrentProduct && (currentProduct?.name || currentProduct?.barcode)) products.push(currentProduct);
   const barcode = cleanBarcode(String(message || "").match(/\d{6,14}/)?.[0] || "");
   const wantsAlternatives = /\b(alternative|alternatives|swap|swaps|instead|other (?:product|products|deodorant|deodorants|food|foods|drink|drinks|option|options)|safer)\b/i.test(message);
   if (barcode) {
@@ -2128,9 +2338,14 @@ async function findGuideProductMatches(env, message, currentProduct, preferences
     }));
     products.push(...batches.flat());
   } else if (wantsAlternatives && currentProduct) {
-    products.push(...await findGuideAlternatives(env, currentProduct, preferences, 2));
-  } else if (isNewBareProduct || looksLikeBareProductName || /\b(find|recommend|alternative|swap|product|compare|score|ingredient|ingredients|what is|tell me about)\b/i.test(message)) {
-    const queries = buildGuideProductSearchQueries(String(message).replace(/\b(find|recommend|show|me|a|an|the|product|alternative|swap|compare|comparison|score|scores|ingredient|ingredients|please|what|is|tell|about|for)\b/gi, " "));
+    const verifiedAlternatives = await findGuideAlternatives(env, currentProduct, preferences, 2);
+    products.push(...verifiedAlternatives);
+    if (verifiedAlternatives.length < 2) {
+      products.push(...await findGuidePossibleAlternatives(env, currentProduct, preferences, 3));
+    }
+  } else if (directLookupQuery || followUpLookupQuery || isNewBareProduct || looksLikeBareProductName || /\b(find|recommend|alternative|swap|product|compare|score|ingredient|ingredients|what is|tell me about)\b/i.test(message)) {
+    const searchText = directLookupQuery || followUpLookupQuery || String(message).replace(/\b(find|recommend|show|me|a|an|the|product|alternative|swap|compare|comparison|score|scores|ingredient|ingredients|please|what|is|tell|about|for)\b/gi, " ");
+    const queries = buildGuideProductSearchQueries(searchText);
     const batches = await Promise.all(queries.map(async (query) => {
       const [savedMatches, openMatches] = await Promise.all([
         searchSavedProducts(env, query, 3),
@@ -2248,9 +2463,12 @@ async function findGuideAlternatives(env, currentProduct, preferences, limit = 2
   if (category.length < 2) return [];
   const currentBarcode = cleanBarcode(currentProduct?.barcode);
   const currentScore = Number(currentProduct?.safetyScore ?? currentProduct?.safety_score ?? 0);
-  const candidates = await searchSavedProducts(env, category.slice(0, 80), 24);
+  const typeQueries = guideAlternativeSearchQueries(currentProduct);
+  const candidateGroups = await Promise.all(typeQueries.map((query) => searchSavedProducts(env, query, 24)));
+  const candidates = candidateGroups.flat();
   return candidates
     .filter((product) => cleanBarcode(product?.barcode) !== currentBarcode)
+    .filter((product) => guideProductMatchesAnyType(product, typeQueries))
     .filter((product) => getGuideIngredientText(product).length > 0)
     .filter((product) => guideProductHasEnoughData(product))
     .filter((product) => !guideProductConflictsWithPreferences(product, preferences))
@@ -2258,6 +2476,85 @@ async function findGuideAlternatives(env, currentProduct, preferences, limit = 2
     .filter((product) => Number(product?.safetyScore ?? product?.safety_score ?? 0) > currentScore)
     .sort((a, b) => Number(b?.safetyScore ?? b?.safety_score ?? 0) - Number(a?.safetyScore ?? a?.safety_score ?? 0))
     .slice(0, Math.max(1, Math.min(2, Number(limit) || 2)));
+}
+
+async function findGuidePossibleAlternatives(env, currentProduct, preferences, limit = 3) {
+  const queries = guideAlternativeSearchQueries(currentProduct);
+  if (!queries.length) return [];
+  const currentBarcode = cleanBarcode(currentProduct?.barcode);
+  const batches = await Promise.all(queries.map(async (query) => {
+    const [savedMatches, openMatches] = await Promise.all([
+      searchSavedProducts(env, query, 12),
+      searchOpenGuideProducts(env, query, preferences, 6),
+    ]);
+    return [...savedMatches, ...openMatches];
+  }));
+  const seen = new Set();
+  const candidates = batches.flat()
+    .filter((product) => {
+      const barcode = cleanBarcode(product?.barcode);
+      const key = barcode || normalizeSearchText(product?.name || product?.detected_product_name);
+      if (!key || key === currentBarcode || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .filter((product) => guideProductMatchesAnyType(product, queries))
+    .filter((product) => getGuideIngredientText(product).length > 0)
+    .map((product) => ({
+      ...product,
+      searchConfidence: product.searchConfidence || "Possible match",
+      dataWarning: product.dataWarning || (product.hasGreenScanScore === false
+        ? "Open database listing; verify the current package before treating this as an alternative."
+        : "Possible GreenScan match; verify this is the exact product formula."),
+    }));
+  const restrictionSafe = candidates.filter((product) => !guideProductConflictsWithPreferences(product, preferences));
+  return (restrictionSafe.length ? restrictionSafe : candidates)
+    .sort((left, right) => {
+      const leftVerified = left.hasGreenScanScore === false ? 0 : 1;
+      const rightVerified = right.hasGreenScanScore === false ? 0 : 1;
+      return rightVerified - leftVerified
+        || Number(right?.safetyScore ?? right?.safety_score ?? -1) - Number(left?.safetyScore ?? left?.safety_score ?? -1)
+        || guideProductRegionRank(right, preferences?.productRegion) - guideProductRegionRank(left, preferences?.productRegion);
+    })
+    .slice(0, Math.max(1, Math.min(3, Number(limit) || 3)));
+}
+
+function guideAlternativeSearchQueries(product) {
+  const text = normalizeSearchText([
+    product?.brand,
+    product?.name,
+    product?.itemCategory || product?.item_category,
+    product?.category || product?.product_category,
+  ].filter(Boolean).join(" "));
+  const typeMap = [
+    { pattern: /\b(antiperspirant|anti perspirant)\b/, queries: ["antiperspirant", "deodorant antiperspirant"] },
+    { pattern: /\bdeodorant\b/, queries: ["deodorant", "deodorant stick", "fragrance free deodorant"] },
+    { pattern: /\b(body wash|bodywash)\b/, queries: ["body wash", "shower gel"] },
+    { pattern: /\bshampoo\b/, queries: ["shampoo"] },
+    { pattern: /\bconditioner\b/, queries: ["conditioner"] },
+    { pattern: /\b(lotion|cream|moisturizer)\b/, queries: ["lotion", "moisturizer", "cream"] },
+    { pattern: /\b(soap|bar soap)\b/, queries: ["soap", "bar soap"] },
+    { pattern: /\b(chips|snack)\b/, queries: ["snack", "chips"] },
+    { pattern: /\b(soda|drink|beverage)\b/, queries: ["drink", "beverage"] },
+  ];
+  const matched = typeMap.find((item) => item.pattern.test(text));
+  return uniqueStrings([
+    ...(matched?.queries || []),
+    normalizeSearchText(product?.itemCategory || product?.item_category || ""),
+    normalizeSearchText(product?.category || product?.product_category || ""),
+  ]).filter((query) => query.length >= 2).slice(0, 4);
+}
+
+function guideProductMatchesAnyType(product, queries = []) {
+  const terms = queries.map(normalizeSearchText).filter(Boolean);
+  if (!terms.length) return true;
+  const text = normalizeSearchText([
+    product?.name || product?.detected_product_name,
+    product?.brand || product?.detected_brand,
+    product?.category || product?.product_category,
+    product?.itemCategory || product?.item_category,
+  ].filter(Boolean).join(" "));
+  return terms.some((term) => text.includes(term) || term.split(" ").some((token) => token.length > 3 && text.includes(token)));
 }
 
 function guideProductHasEnoughData(product) {
@@ -3410,6 +3707,111 @@ async function maybeCreateAiSuggestedRepair(env, options = {}) {
   };
 }
 
+async function maybeCreateGuideSuggestedRepair(env, options = {}) {
+  const product = options.product || {};
+  const barcode = cleanBarcode(product.barcode);
+  if (!barcode) return null;
+  const reasons = getGuideRepairReasons(product, options.storedProduct, options.suppliedProduct);
+  if (!reasons.length) return null;
+  const compact = compactAnalysis(product);
+  const ingredientText = String(compact.ingredientsText || compact.extracted_ingredients_text || getGuideIngredientText(compact) || "").slice(0, 8000);
+  const duplicate = await findDuplicatePendingReport(env, {
+    barcode,
+    issueType: "ingredients",
+    proposedName: compact.name || compact.detected_product_name || "",
+    proposedBrand: compact.brand || compact.detected_brand || "",
+    ingredientText,
+    frontImage: getPersistentImageUrl(compact.imageUrl || ""),
+  });
+  const confidence = calculateGuideRepairConfidence(reasons, compact);
+  if (duplicate) {
+    const lastSeen = Date.parse(duplicate.lastDuplicateAt || duplicate.createdAt || "");
+    if (Number.isFinite(lastSeen) && Date.now() - lastSeen < 6 * 60 * 60 * 1000) {
+      return { id: duplicate.id, duplicate: true, pending_review: true, confidence, reasons };
+    }
+    await env.PRODUCT_CACHE.put(`report:${duplicate.id}`, JSON.stringify({
+      ...duplicate,
+      duplicateCount: Number(duplicate.duplicateCount || 1) + 1,
+      aiRepairReasons: uniqueStrings([...(duplicate.aiRepairReasons || []), ...reasons]).slice(0, 10),
+      aiRepairConfidence: Math.max(Number(duplicate.aiRepairConfidence || 0), confidence),
+      lastDuplicateAt: new Date().toISOString(),
+    }));
+    return { id: duplicate.id, duplicate: true, pending_review: true, confidence, reasons };
+  }
+  const id = crypto.randomUUID();
+  await env.PRODUCT_CACHE.put(`report:${id}`, JSON.stringify({
+    id,
+    status: "pending",
+    barcode,
+    issueType: "ingredients",
+    reportSource: "ai_suggested_repair",
+    userIdentity: "system:greenscan-guide",
+    userEmail: options.user?.email || "",
+    original: compact,
+    proposedAnalysis: compact,
+    frontImage: getPersistentImageUrl(compact.imageUrl || ""),
+    productImage: getPersistentImageUrl(compact.imageUrl || ""),
+    ingredientText,
+    aiRepairReasons: reasons,
+    aiRepairConfidence: confidence,
+    aiSourceLabel: "GreenScan Guide",
+    createdAt: new Date().toISOString(),
+  }));
+  await addQueueItem(env, "pending-reports", id);
+  await incrementAdminCounters(env, { reports: 1 });
+  return { id, duplicate: false, pending_review: true, confidence, reasons };
+}
+
+function getGuideRepairReasons(product = {}, storedProduct = null, suppliedProduct = null) {
+  const reasons = [];
+  const name = String(product.name || product.detected_product_name || "");
+  const summary = String(product.summary || "");
+  const text = String(product.ingredientsText || product.extracted_ingredients_text || getGuideIngredientText(product) || "");
+  const ingredients = Array.isArray(product.ingredients) ? product.ingredients : [];
+  const categoryText = normalizeSearchText([
+    product.category,
+    product.product_category,
+    product.itemCategory,
+    product.item_category,
+    name,
+  ].filter(Boolean).join(" "));
+  const scores = [
+    product.safetyScore,
+    product.safety_score,
+    product.score,
+    product.overallScore,
+    storedProduct?.safetyScore,
+    storedProduct?.safety_score,
+    suppliedProduct?.safetyScore,
+    suppliedProduct?.safety_score,
+  ].map(Number).filter(Number.isFinite).map((score) => Math.round(score));
+  const distinctScores = uniqueStrings(scores).map(Number);
+  if (distinctScores.length >= 2 && Math.max(...distinctScores) - Math.min(...distinctScores) >= 12) {
+    reasons.push(`Guide detected conflicting score fields (${distinctScores.sort((a, b) => a - b).join(" / ")}).`);
+  }
+  if (hasNoisyIngredientSectionText(text)) reasons.push("Guide detected non-ingredient label text mixed into the ingredients.");
+  if (hasMojibakeText(text) || hasMojibakeText(name)) reasons.push("Guide detected broken text encoding.");
+  if (isWeakProductIdentity(cleanProductIdentityText(name))) reasons.push("Guide detected a generic or weak product name.");
+  if (/\b(food|drink|nutrition|calories)\b/i.test(summary) && /\b(deodorant|antiperspirant|body wash|shampoo|conditioner|lotion|cream|soap)\b/.test(categoryText)) {
+    reasons.push("Guide detected a product category or summary mismatch.");
+  }
+  if (/\b(deodorant|antiperspirant|body wash|shampoo|conditioner|lotion|cream|soap)\b/.test(categoryText) && ingredients.length > 0 && ingredients.length <= 2) {
+    reasons.push("Guide detected a likely incomplete ingredient list for this product type.");
+  }
+  if (ingredients.some((item) => Number(item?.riskScore ?? item?.score ?? item?.rating) === 0 && /not a verified entry|unverified|unknown/i.test(String(item?.reason || ""))) && ingredients.length >= 4) {
+    reasons.push("Guide detected several unverified ingredients that may need dictionary review.");
+  }
+  return uniqueStrings(reasons).slice(0, 8);
+}
+
+function calculateGuideRepairConfidence(reasons = [], product = {}) {
+  let score = 62 + Math.min(24, reasons.length * 6);
+  const ingredientCount = Array.isArray(product.ingredients) ? product.ingredients.length : 0;
+  if (ingredientCount >= 4) score += 6;
+  if (String(product.ingredientsText || product.extracted_ingredients_text || "").length >= 40) score += 6;
+  return Math.max(70, Math.min(94, Math.round(score)));
+}
+
 function buildAiSuggestedRepair(original, proposed, databaseQuality = {}) {
   if (!databaseQuality?.safeToSave) return null;
   const originalCompact = compactAnalysis(original);
@@ -4506,38 +4908,128 @@ function mergeProductRecords(keep, duplicate, keepBarcode, adminEmail) {
 }
 
 function compactSearchAnalysis(analysis) {
+  const category = normalizeGuideProductCategory(
+    analysis.category || analysis.product_category,
+    analysis.itemCategory || analysis.item_category,
+    analysis.name || analysis.detected_product_name,
+  );
+  const score = getCanonicalGuideScore(analysis);
+  const ingredients = Array.isArray(analysis.ingredients) ? analysis.ingredients.slice(0, 120) : [];
+  const summary = buildCanonicalGuideSummary(analysis.summary, score, category, ingredients);
   return {
     barcode: cleanBarcode(analysis.barcode),
     name: String(analysis.name || analysis.detected_product_name || "Saved product").slice(0, 160),
-    detected_product_name: String(analysis.detected_product_name || analysis.name || "").slice(0, 160),
     brand: String(analysis.brand || analysis.detected_brand || "").slice(0, 120),
-    detected_brand: String(analysis.detected_brand || analysis.brand || "").slice(0, 120),
-    category: String(analysis.category || analysis.product_category || "unknown").slice(0, 40),
-    product_category: String(analysis.product_category || analysis.category || "unknown").slice(0, 40),
+    category,
     itemCategory: String(analysis.itemCategory || analysis.item_category || "").slice(0, 80),
-    item_category: String(analysis.item_category || analysis.itemCategory || "").slice(0, 80),
     countries: String(analysis.countries || "").slice(0, 300),
     countriesTags: Array.isArray(analysis.countriesTags) ? analysis.countriesTags.slice(0, 20) : (Array.isArray(analysis.countries_tags) ? analysis.countries_tags.slice(0, 20) : []),
     externalSource: String(analysis.externalSource || "").slice(0, 60),
-    hasGreenScanScore: analysis.hasGreenScanScore !== false && Number.isFinite(Number(analysis.safetyScore ?? analysis.safety_score)),
+    hasGreenScanScore: analysis.hasGreenScanScore !== false && Number.isFinite(score),
     searchConfidence: String(analysis.searchConfidence || "").slice(0, 30),
     listingQuality: String(analysis.listingQuality || "").slice(0, 40),
     dataWarning: String(analysis.dataWarning || "").slice(0, 240),
     imageUrl: cleanImageUrl(analysis.imageUrl),
-    ingredients: Array.isArray(analysis.ingredients) ? analysis.ingredients.slice(0, 120) : [],
+    ingredients,
     ingredientsText: String(analysis.ingredientsText || analysis.extracted_ingredients_text || "").slice(0, 8000),
-    extracted_ingredients_text: String(analysis.extracted_ingredients_text || analysis.ingredientsText || "").slice(0, 8000),
-    safetyScore: analysis.safetyScore ?? analysis.safety_score,
-    safety_score: analysis.safety_score ?? analysis.safetyScore,
-    scoreColor: analysis.scoreColor || analysis.score_color,
-    score_color: analysis.score_color || analysis.scoreColor,
-    summary: String(analysis.summary || "").slice(0, 1000),
+    ...(Number.isFinite(score) ? { safetyScore: score } : {}),
+    scoreColor: analysis.scoreColor || analysis.score_color || scoreColorFromScore(score),
+    summary,
     positiveNotes: Array.isArray(analysis.positiveNotes) ? analysis.positiveNotes.slice(0, 12) : analysis.positive_notes || [],
-    positive_notes: Array.isArray(analysis.positive_notes) ? analysis.positive_notes.slice(0, 12) : analysis.positiveNotes || [],
     changeLog: normalizeChangeLog(analysis.changeLog),
     source: "Saved database",
     savedAt: analysis.savedAt || analysis.saved_at || "",
   };
+}
+
+function getCanonicalGuideScore(analysis) {
+  if (analysis?.hasGreenScanScore === false) return Number.NaN;
+  const derived = calculateGuideScoreFromIngredients(analysis);
+  if (Number.isFinite(derived)) return clampNumber(derived, 0, 100);
+  const primary = Number(analysis?.safetyScore);
+  if (Number.isFinite(primary)) return clampNumber(primary, 0, 100);
+  const legacy = Number(analysis?.safety_score);
+  if (Number.isFinite(legacy)) return clampNumber(legacy, 0, 100);
+  return Number.NaN;
+}
+
+function calculateGuideScoreFromIngredients(analysis = {}) {
+  const ingredients = Array.isArray(analysis.ingredients) ? analysis.ingredients : [];
+  if (!ingredients.length) return Number.NaN;
+  const category = normalizeGuideProductCategory(
+    analysis.category || analysis.product_category,
+    analysis.itemCategory || analysis.item_category,
+    analysis.name || analysis.detected_product_name,
+  );
+  let score = 100;
+  const ingredientText = ingredients.map((ingredient) => [
+    ingredient?.rawName,
+    ingredient?.raw_name,
+    ingredient?.name,
+    ingredient?.normalizedName,
+    ingredient?.normalized_name,
+    ingredient?.type,
+    ingredient?.ingredient_type,
+  ].filter(Boolean).join(" ")).join(" ").toLowerCase();
+  const hasAny = (terms) => terms.some((term) => ingredientText.includes(term));
+  const highCount = ingredients.filter((ingredient) => normalizeGuideRisk(ingredient?.risk) === "high").length;
+  const moderateCount = ingredients.filter((ingredient) => normalizeGuideRisk(ingredient?.risk) === "moderate").length;
+  const unknownCount = ingredients.filter((ingredient) => normalizeGuideRisk(ingredient?.risk) === "unknown").length;
+  score -= highCount * 18;
+  score -= moderateCount * 8;
+  score -= unknownCount * 3;
+  if (category === "food") {
+    if (hasAny(["red 40", "yellow 5", "yellow 6", "blue 1", "artificial color"])) score -= 6;
+    if (hasAny(["high fructose corn syrup"])) score -= 10;
+    if (hasAny(["bha", "bht"])) score -= 10;
+    if (hasAny(["sodium nitrite"])) score -= 18;
+    if (hasAny(["sugar", "cane sugar", "glucose syrup", "corn syrup", "dextrose", "fructose", "sucrose", "maltodextrin"])) score -= 10;
+    if (hasAny(["artificial flavor", "artificial color", "red 40", "yellow 5", "yellow 6", "blue 1", "caramel color"])) score -= 5;
+    if (hasAny(["vegetable oil", "canola oil", "soybean oil", "palm oil", "sunflower oil", "corn oil"])) score -= 7;
+    if (hasAny(["whole grain", "oats", "beans", "lentils", "fruit", "vegetable"])) score += 3;
+  }
+  if (category === "beauty") {
+    if (hasAny(["fragrance", "parfum"])) score -= 6;
+    if (hasAny(["methylisothiazolinone", "methylchloroisothiazolinone", "formaldehyde", "dmdm hydantoin", "imidazolidinyl urea"])) score -= 14;
+    if (hasAny(["denatured alcohol", "alcohol denat", "sd alcohol"])) score -= 8;
+    if (hasAny(["sodium lauryl sulfate", "sodium laureth sulfate", "ammonium lauryl sulfate", "sls", "sles"])) score -= 6;
+    if (!hasAny(["fragrance", "parfum", "methylisothiazolinone", "methylchloroisothiazolinone"])) score += 5;
+  }
+  if (!highCount) score += 5;
+  if (ingredients.length <= 8) score += 3;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function normalizeGuideProductCategory(category, itemCategory, name) {
+  const haystack = `${category || ""} ${itemCategory || ""} ${name || ""}`.toLowerCase();
+  if (/\b(deodorant|antiperspirant|body wash|bodywash|shampoo|conditioner|lotion|cream|soap|serum|cleanser|sunscreen|fragrance|hair|beauty)\b/.test(haystack)) return "beauty";
+  if (/\b(food|drink|soda|chips|snack|beverage|juice|candy|cookie|cracker|sauce)\b/.test(haystack)) return "food";
+  const value = String(category || "unknown").toLowerCase().slice(0, 40);
+  return value === "cosmetic" ? "beauty" : value || "unknown";
+}
+
+function buildCanonicalGuideSummary(summary, score, category, ingredients = []) {
+  const text = String(summary || "").trim();
+  const categoryMismatch = (category === "beauty" && /\b(food|drink)\b/i.test(text))
+    || (category === "food" && /\b(cosmetic|beauty|hair|skin)\b/i.test(text));
+  const scoreSentimentMismatch = Number.isFinite(score) && (
+    (score < 50 && /\b(excellent|good|lower concern|low concern|safe)\b/i.test(text))
+    || (score >= 75 && /\b(poor|bad|high-priority|high risk|multiple ingredient concerns)\b/i.test(text))
+  );
+  if (text && !categoryMismatch && !scoreSentimentMismatch && !/\b(safetyScore|safety_score|scoreColor|score_color)\b/.test(text)) {
+    return text.slice(0, 1000);
+  }
+  if (!Number.isFinite(score)) return "This product listing needs review because the GreenScan score is not available.";
+  const concernCount = ingredients.filter((item) => {
+    const risk = normalizeGuideRisk(typeof item === "string" ? "" : item?.risk);
+    return risk === "high" || risk === "moderate" || risk === "unknown";
+  }).length;
+  const label = category === "beauty" ? "beauty product" : category === "food" ? "food or drink" : "product";
+  if (score >= 90) return `This ${label} looks excellent based on the available GreenScan ingredient data.`;
+  if (score >= 75) return `This ${label} looks lower concern based on the available GreenScan ingredient data.`;
+  if (score >= 50) return `This ${label} has ${concernCount || "some"} ingredient concern${concernCount === 1 ? "" : "s"} worth reviewing.`;
+  if (score >= 25) return `This ${label} has multiple ingredient concerns and should be reviewed carefully.`;
+  return `This ${label} has multiple or high-priority ingredient concerns.`;
 }
 
 async function getAccountList(env, key) {
@@ -4555,6 +5047,8 @@ function compactHistoryItem(item) {
   const barcode = cleanBarcode(item.barcode);
   const name = String(item.name || item.detected_product_name || "").trim().slice(0, 180);
   if (!barcode && !name) return null;
+  const ingredients = sanitizeHistoryIngredients(item.ingredients, 45);
+  const score = getCanonicalGuideScore({ ...item, ingredients });
   return {
     barcode,
     name: name || "Saved product",
@@ -4566,13 +5060,15 @@ function compactHistoryItem(item) {
     itemCategory: String(item.itemCategory || item.item_category || "").slice(0, 80),
     item_category: String(item.item_category || item.itemCategory || "").slice(0, 80),
     imageUrl: getPersistentImageUrl(item.imageUrl),
-    ingredients: sanitizeHistoryIngredients(item.ingredients, 45),
+    ingredients,
     ingredientsText: String(item.ingredientsText || item.extracted_ingredients_text || "").slice(0, 8000),
     extracted_ingredients_text: String(item.extracted_ingredients_text || item.ingredientsText || "").slice(0, 8000),
-    safetyScore: item.safetyScore ?? item.safety_score,
-    safety_score: item.safety_score ?? item.safetyScore,
-    scoreColor: item.scoreColor || item.score_color,
-    score_color: item.score_color || item.scoreColor,
+    ...(Number.isFinite(score) ? {
+      safetyScore: score,
+      safety_score: score,
+      scoreColor: scoreColorFromScore(score),
+      score_color: scoreColorFromScore(score),
+    } : {}),
     summary: String(item.summary || "").slice(0, 1000),
     positiveNotes: sanitizeStringList(item.positiveNotes || item.positive_notes, 8, 180),
     positive_notes: sanitizeStringList(item.positive_notes || item.positiveNotes, 8, 180),

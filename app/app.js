@@ -9,6 +9,7 @@ const state = {
   scanCandidateCount: 0,
   scanCandidateAt: 0,
   scanStartedAt: 0,
+  scanFallbackStarted: false,
   scanHelpShown: false,
   scanMatched: false,
   scanSoundMuted: localStorage.getItem("greenscan.scanSoundMuted") === "true",
@@ -21,7 +22,9 @@ const state = {
   selectedProductType: "",
   labelHasNutritionFacts: "",
   settings: loadSettings(),
+  appearanceSettings: loadAppearanceSettings(),
   userAiSettings: loadUserAiSettings(),
+  guideSettings: loadGuideSettings(),
   avoidList: loadAvoidList(),
   dietaryFilters: loadDietaryFilters(),
   productRegion: loadProductRegion(),
@@ -56,6 +59,8 @@ const state = {
   guideActivityTimer: null,
   guideReturnView: "forYou",
   guideProduct: null,
+  guidePendingAction: "select",
+  scanAutoStartPending: false,
   guideLimit: { limit: 8, remaining: 8, unlimited: false },
 };
 
@@ -145,7 +150,21 @@ const els = {
   referralLinkInput: document.querySelector("#referralLinkInput"),
   copyReferralLinkButton: document.querySelector("#copyReferralLinkButton"),
   googleLoginButton: document.querySelector("#googleLoginButton"),
+  appearanceButton: document.querySelector("#appearanceButton"),
+  appearanceDialog: document.querySelector("#appearanceDialog"),
+  appearanceModeRadios: [...document.querySelectorAll("input[name='appearanceMode']")],
+  saveAppearanceButton: document.querySelector("#saveAppearanceButton"),
+  appearancePromptDialog: document.querySelector("#appearancePromptDialog"),
+  chooseSimpleModeButton: document.querySelector("#chooseSimpleModeButton"),
+  chooseDefaultModeButton: document.querySelector("#chooseDefaultModeButton"),
   aiProviderButton: document.querySelector("#aiProviderButton"),
+  guideSettingsButton: document.querySelector("#guideSettingsButton"),
+  guideSettingsDialog: document.querySelector("#guideSettingsDialog"),
+  guideEnabledToggle: document.querySelector("#guideEnabledToggle"),
+  guideSettingsUsageText: document.querySelector("#guideSettingsUsageText"),
+  guideSettingsUsageBar: document.querySelector("#guideSettingsUsageBar"),
+  saveGuideSettingsButton: document.querySelector("#saveGuideSettingsButton"),
+  openGuideFromSettingsButton: document.querySelector("#openGuideFromSettingsButton"),
   restrictionsButton: document.querySelector("#restrictionsButton"),
   restrictionsDialog: document.querySelector("#restrictionsDialog"),
   productRegion: document.querySelector("#productRegion"),
@@ -164,6 +183,7 @@ const els = {
   aiProviderProfileList: document.querySelector("#aiProviderProfileList"),
   verifyUnknownIngredientsToggle: document.querySelector("#verifyUnknownIngredientsToggle"),
   contributeToDatabaseToggle: document.querySelector("#contributeToDatabaseToggle"),
+  aiRepairSuggestionsToggle: document.querySelector("#aiRepairSuggestionsToggle"),
   saveAiProviderButton: document.querySelector("#saveAiProviderButton"),
   clearAiProviderButton: document.querySelector("#clearAiProviderButton"),
   sourcesButton: document.querySelector("#sourcesButton"),
@@ -239,15 +259,27 @@ const els = {
   logoutButton: document.querySelector("#logoutButton"),
   navHistoryButton: document.querySelector("#navHistoryButton"),
   navForYouButton: document.querySelector("#navForYouButton"),
+  navGuideButton: document.querySelector("#navGuideButton"),
   navScanButton: document.querySelector("#navScanButton"),
   navSearchButton: document.querySelector("#navSearchButton"),
   navSourcesButton: document.querySelector("#navSourcesButton"),
   forYouGuideButton: document.querySelector("#forYouGuideButton"),
   guidePanel: document.querySelector("#guidePanel"),
   guideLearnButton: document.querySelector("#guideLearnButton"),
+  guideInfoDialog: document.querySelector("#guideInfoDialog"),
   guideNewChatButton: document.querySelector("#guideNewChatButton"),
   guideCloseButton: document.querySelector("#guideCloseButton"),
   guideWelcome: document.querySelector("#guideWelcome"),
+  guideToolPanel: document.querySelector("#guideToolPanel"),
+  guideToolBackButton: document.querySelector("#guideToolBackButton"),
+  guideToolTitle: document.querySelector("#guideToolTitle"),
+  guideToolSearchForm: document.querySelector("#guideToolSearchForm"),
+  guideToolSearchInput: document.querySelector("#guideToolSearchInput"),
+  guideHistorySection: document.querySelector("#guideHistorySection"),
+  guideHistoryProducts: document.querySelector("#guideHistoryProducts"),
+  guideSearchSection: document.querySelector("#guideSearchSection"),
+  guideSearchStatus: document.querySelector("#guideSearchStatus"),
+  guideSearchProducts: document.querySelector("#guideSearchProducts"),
   guideGreeting: document.querySelector("#guideGreeting"),
   guideMessages: document.querySelector("#guideMessages"),
   guideForm: document.querySelector("#guideForm"),
@@ -662,6 +694,13 @@ const knownIngredientCatalog = [
   { match: "panthenol", type: "cosmetic_base", categories: ["beauty"], reason: "Common provitamin B5 conditioning ingredient." },
   { match: "tocopherol", type: "cosmetic_base", categories: ["beauty"], reason: "Vitamin E; commonly used as an antioxidant in cosmetics." },
   { match: "cetearyl alcohol", type: "cosmetic_base", categories: ["beauty"], reason: "Common fatty alcohol used for texture and conditioning." },
+  { match: "xanthan gum", type: "cosmetic_base", categories: ["beauty"], reason: "Common thickener and stabilizer used in cosmetics." },
+  { match: "hydroxypropyl guar hydroxypropyltrimonium chloride", type: "cosmetic_base", categories: ["beauty"], reason: "Common conditioning polymer used in hair and body-care products." },
+  { match: "potassium oleate", type: "surfactant", categories: ["beauty"], reason: "Common soap/surfactant ingredient used for cleansing." },
+  { match: "potassium cocoate", type: "surfactant", categories: ["beauty"], reason: "Common coconut-derived soap/surfactant used for cleansing." },
+  { match: "trisodium dicarboxymethyl alaninate", type: "cosmetic_base", categories: ["beauty"], reason: "Common chelating ingredient used to support formula stability." },
+  { match: "saccharide isomerate", type: "cosmetic_base", categories: ["beauty"], reason: "Common humectant used to help retain moisture." },
+  { match: "ethylhexylglycerin", type: "preservative_cosmetic", categories: ["beauty"], reason: "Common preservative booster and skin-conditioning ingredient." },
 ];
 
 const foodSugarTerms = ["sugar", "cane sugar", "glucose syrup", "corn syrup", "high fructose corn syrup", "dextrose", "maltodextrin", "fructose", "sucrose", "honey", "agave", "molasses", "invert sugar", "rice syrup", "barley malt", "maple syrup"];
@@ -910,6 +949,16 @@ function getDietaryFilterMatch(text) {
 
 els.startCameraButton.addEventListener("click", startCamera);
 els.stopCameraButton.addEventListener("click", stopCamera);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopCamera();
+  else if (state.activeView === "scan") autoStartCameraIfAllowed();
+});
+window.addEventListener("pageshow", () => {
+  if (state.activeView === "scan") autoStartCameraIfAllowed();
+});
+window.addEventListener("focus", () => {
+  if (state.activeView === "scan") autoStartCameraIfAllowed();
+});
 els.soundToggleButton.addEventListener("click", toggleScanSound);
 els.torchToggleButton.addEventListener("click", toggleTorch);
 els.installTabs.forEach((button) => button.addEventListener("click", () => setInstallPlatform(button.dataset.installPlatform)));
@@ -930,13 +979,27 @@ els.landingGuideButton?.addEventListener("click", () => openGuide());
 els.forYouGuideButton?.addEventListener("click", () => openGuide());
 els.guideCloseButton?.addEventListener("click", closeGuide);
 els.guideNewChatButton?.addEventListener("click", resetGuideChat);
-els.guideLearnButton?.addEventListener("click", () => els.guideWelcome?.classList.toggle("hidden"));
+els.guideLearnButton?.addEventListener("click", () => {
+  if (typeof els.guideInfoDialog?.showModal === "function") {
+    els.guideInfoDialog.showModal();
+  } else {
+    toast("Guide explains products, ingredients, scores, and your restrictions using GreenScan data.");
+  }
+});
 els.guideForm?.addEventListener("submit", sendGuideMessage);
+els.guideInput?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  if (!state.guideBusy && String(els.guideInput.value || "").trim()) {
+    els.guideForm?.requestSubmit?.();
+  }
+});
 els.guideModelSelect?.addEventListener("change", saveGuideModelChoice);
-els.guideWelcome?.querySelectorAll("[data-guide-prompt]").forEach((button) => button.addEventListener("click", () => {
-  els.guideInput.value = button.dataset.guidePrompt || "";
-  sendGuideMessage();
+els.guideWelcome?.querySelectorAll("[data-guide-action]").forEach((button) => button.addEventListener("click", () => {
+  startGuideAction(button.dataset.guideAction || "select");
 }));
+els.guideToolBackButton?.addEventListener("click", closeGuideProductPicker);
+els.guideToolSearchForm?.addEventListener("submit", searchGuideProducts);
 els.notificationButton.addEventListener("click", () => {
   closeTopMenu();
   openNotifications();
@@ -964,6 +1027,7 @@ els.navForYouButton.addEventListener("click", () => {
   switchView("forYou");
   window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
 });
+els.navGuideButton?.addEventListener("click", () => openGuide());
 els.navScanButton.addEventListener("click", () => showScannerView());
 els.navSearchButton.addEventListener("click", openSearchView);
 els.navSourcesButton.addEventListener("click", openSourcesFromNav);
@@ -983,7 +1047,17 @@ els.themeToggleButton?.addEventListener("click", () => {
   toggleTheme();
 });
 els.googleLoginButton.addEventListener("click", loginWithGoogle);
+els.appearanceButton?.addEventListener("click", openAppearanceSettings);
+els.saveAppearanceButton?.addEventListener("click", saveAppearanceSettings);
+els.chooseSimpleModeButton?.addEventListener("click", () => chooseAppearanceFromPrompt("simple"));
+els.chooseDefaultModeButton?.addEventListener("click", () => chooseAppearanceFromPrompt("default"));
 els.aiProviderButton.addEventListener("click", openAiProvider);
+els.guideSettingsButton?.addEventListener("click", openGuideSettings);
+els.saveGuideSettingsButton?.addEventListener("click", saveGuideSettings);
+els.openGuideFromSettingsButton?.addEventListener("click", () => {
+  els.guideSettingsDialog?.close();
+  openGuide();
+});
 els.restrictionsButton.addEventListener("click", openRestrictions);
 els.productRegion?.addEventListener("change", saveProductRegion);
 els.saveAvoidListButton.addEventListener("click", saveAvoidListFromSettings);
@@ -1048,6 +1122,7 @@ document.addEventListener("keydown", (event) => {
 initDesktopNavigation();
 initBottomNavViewportLock();
 initTheme();
+applyAppearanceMode();
 initCameraHint();
 captureReferralCode();
 initAuth();
@@ -1063,7 +1138,7 @@ cleanupLocalCache();
 syncPendingAnalyses();
 window.addEventListener("online", () => syncPendingAnalyses());
 registerServiceWorker();
-switchView(state.user ? "forYou" : "home");
+switchView("scan");
 loadSharedProductFromUrl();
 updateSoundToggle();
 updateTorchToggle();
@@ -1265,7 +1340,7 @@ function closeTopMenu() {
   els.topMenuButton.setAttribute("aria-expanded", "false");
 }
 
-async function startCamera() {
+async function startCamera(options = {}) {
   scrollToScannerPanel("smooth");
   resetScanForNextProduct();
   clearScannerStill();
@@ -1291,6 +1366,10 @@ async function startCamera() {
       showCameraHelp("Camera permission is blocked. Open this page's site settings, allow Camera, then tap Scan again.");
       return;
     }
+    if (permission === "prompt" && options.auto && !hasRememberedCameraAccess()) {
+      els.cameraHint.textContent = "Tap Scan once to allow camera access.";
+      return;
+    }
     if (permission === "prompt") {
       els.cameraHint.textContent = "Starting camera...";
     } else if (permission === "granted") {
@@ -1309,6 +1388,7 @@ async function startCamera() {
     els.cameraFeed.srcObject = state.stream;
     await els.cameraFeed.play();
     state.cameraActive = true;
+    syncCameraActiveClass();
     state.scanStartedAt = Date.now();
     state.scanHelpShown = false;
     updateScanAssist("Finding barcode", "Hold the barcode steady inside the frame.", 18);
@@ -1322,20 +1402,15 @@ async function startCamera() {
       els.permissionCallout.classList.add("hidden");
       state.scanTimer = window.setInterval(scanFrameForBarcode, 140);
     } else if (window.ZXingBrowser?.BrowserMultiFormatOneDReader) {
-      state.zxingReader = new window.ZXingBrowser.BrowserMultiFormatOneDReader(undefined, {
-        delayBetweenScanAttempts: 160,
-        delayBetweenScanSuccess: 350,
-      });
-      showCameraInfo("Camera is running. Hold the barcode steady inside the frame.");
-      state.scanTimer = window.setInterval(scanFrameWithZxing, 180);
+      startZxingScanner("Camera is running. Hold the barcode steady inside the frame.");
     } else if (window.Quagga) {
-      showCameraInfo("Camera is running. Hold the barcode steady inside the frame.");
-      state.scanTimer = window.setInterval(scanFrameWithQuagga, 280);
+      startQuaggaScanner("Camera is running. Hold the barcode steady inside the frame.");
     } else {
       showCameraInfo("Camera is on, but the barcode reader could not load. Type the barcode below or use the ingredient photo fallback.");
     }
   } catch (error) {
     state.cameraActive = false;
+    syncCameraActiveClass();
     const message = getCameraErrorMessage(error);
     showCameraHelp(message);
   }
@@ -1404,6 +1479,7 @@ function stopCamera() {
   state.scanBusy = false;
   resetScanCandidate();
   state.cameraActive = false;
+  syncCameraActiveClass();
   els.cameraFeed.style.display = "none";
   els.scannerEmpty.classList.toggle("hidden", els.scannerViewport.classList.contains("has-scan-still"));
   els.cameraHint.textContent = hasRememberedCameraAccess()
@@ -1471,6 +1547,10 @@ function rememberCameraAllowed() {
   }
 }
 
+function syncCameraActiveClass() {
+  document.body.classList.toggle("camera-active", Boolean(state.cameraActive));
+}
+
 function hasRememberedCameraAccess() {
   try {
     return localStorage.getItem("greenscan.cameraAllowed") === "true";
@@ -1493,30 +1573,53 @@ async function scanFrameForBarcode() {
     const codes = await state.barcodeDetector.detect(getScanCanvasFrame());
     if (codes.length > 0) {
       await handleDetectedBarcode(codes[0].rawValue);
+    } else {
+      maybeStartScannerFallback();
     }
   } catch (error) {
     state.scanBusy = false;
     state.barcodeDetector = null;
-    if (window.ZXingBrowser?.BrowserMultiFormatOneDReader) {
-      if (state.scanTimer) window.clearInterval(state.scanTimer);
-      state.zxingReader = new window.ZXingBrowser.BrowserMultiFormatOneDReader(undefined, {
-        delayBetweenScanAttempts: 160,
-        delayBetweenScanSuccess: 350,
-      });
-      showCameraInfo("Camera is running. Hold the barcode steady inside the frame.");
-      state.scanTimer = window.setInterval(scanFrameWithZxing, 180);
-      return;
-    }
-    if (window.Quagga) {
-      if (state.scanTimer) window.clearInterval(state.scanTimer);
-      showCameraInfo("Camera is running. Hold the barcode steady inside the frame.");
-      state.scanTimer = window.setInterval(scanFrameWithQuagga, 280);
-      return;
-    }
-    showCameraInfo("Camera is running, but auto-read failed. Type the barcode below if scanning does not catch it.");
+    startNextScannerFallback("Camera is running. Trying another barcode reader.");
     return;
   }
   state.scanBusy = false;
+}
+
+function maybeStartScannerFallback() {
+  if (state.scanFallbackStarted || state.scanMatched || state.scanCandidateCount > 0) return;
+  if (!state.scanStartedAt || Date.now() - state.scanStartedAt < 1400) return;
+  state.scanFallbackStarted = true;
+  startNextScannerFallback("Still looking. Trying another barcode reader.");
+}
+
+function startNextScannerFallback(message) {
+  state.barcodeDetector = null;
+  if (window.ZXingBrowser?.BrowserMultiFormatOneDReader) {
+    startZxingScanner(message);
+    return true;
+  }
+  if (window.Quagga) {
+    startQuaggaScanner(message);
+    return true;
+  }
+  showCameraInfo("Camera is running, but auto-read is struggling. Type the barcode below if scanning does not catch it.");
+  return false;
+}
+
+function startZxingScanner(message) {
+  if (state.scanTimer) window.clearInterval(state.scanTimer);
+  state.zxingReader = new window.ZXingBrowser.BrowserMultiFormatOneDReader(undefined, {
+    delayBetweenScanAttempts: 130,
+    delayBetweenScanSuccess: 300,
+  });
+  showCameraInfo(message);
+  state.scanTimer = window.setInterval(scanFrameWithZxing, 150);
+}
+
+function startQuaggaScanner(message) {
+  if (state.scanTimer) window.clearInterval(state.scanTimer);
+  showCameraInfo(message);
+  state.scanTimer = window.setInterval(scanFrameWithQuagga, 260);
 }
 
 async function scanFrameWithZxing() {
@@ -1531,9 +1634,7 @@ async function scanFrameWithZxing() {
     }
   } catch (error) {
     if (!isExpectedScannerMiss(error) && window.Quagga) {
-      if (state.scanTimer) window.clearInterval(state.scanTimer);
-      showCameraInfo("Camera is running. Hold the barcode steady inside the frame.");
-      state.scanTimer = window.setInterval(scanFrameWithQuagga, 280);
+      startQuaggaScanner("Camera is running. Trying the backup barcode reader.");
     }
   } finally {
     state.scanBusy = false;
@@ -1663,6 +1764,7 @@ function resetScanCandidate() {
   state.scanCandidateCount = 0;
   state.scanCandidateAt = 0;
   state.scanStartedAt = 0;
+  state.scanFallbackStarted = false;
   state.scanHelpShown = false;
   state.scanMatched = false;
 }
@@ -2563,7 +2665,14 @@ function stripNonIngredientTail(value) {
 
 function normalizeIngredientTextTypos(value) {
   return String(value || "")
-    .replace(/\bispartame\b/gi, "aspartame");
+    .replace(/\bispartame\b/gi, "aspartame")
+    .replace(/\bputassium\b/gi, "potassium")
+    .replace(/\bpotassium\s+oleste\b/gi, "potassium oleate")
+    .replace(/\bpriso(?:dium|diurn)\b/gi, "trisodium")
+    .replace(/\btrisodium\s+dicarboxymeth(?:yl)?\b/gi, "trisodium dicarboxymethyl alaninate")
+    .replace(/\bsaccharide\s+lomerate\b/gi, "saccharide isomerate")
+    .replace(/\bethylnexylglycerin\b/gi, "ethylhexylglycerin")
+    .replace(/\bhydroxypropyl\s+guar\s+hydro\b/gi, "hydroxypropyl guar hydroxypropyltrimonium chloride");
 }
 
 function getIngredientAlias(value) {
@@ -4407,7 +4516,9 @@ function normalizeRenderableAnalysis(analysis) {
     nutritionFacts,
     ingredients: normalizedIngredients,
     safetyScore: Math.max(0, Math.min(100, Math.round(score))),
+    safety_score: Math.max(0, Math.min(100, Math.round(score))),
     scoreColor: scoreColor(score),
+    score_color: scoreColor(score),
     name: analysis.name || analysis.detected_product_name || "Photo analyzed product",
     source: analysis.source || "Ingredient analysis",
     category,
@@ -5302,6 +5413,7 @@ async function analyzeWithEdgeFunction() {
     userAiModel: state.user ? getSelectedUserAiModel() : "",
     userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
     allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false,
+    allowAiRepairSuggestions: state.userAiSettings.aiRepairSuggestions !== false,
     hasNutritionFacts: state.selectedProductType === "food" ? state.labelHasNutritionFacts : "not_applicable",
     frontImage,
     backImage,
@@ -5354,6 +5466,7 @@ async function buildCurrentAnalysisPayload() {
     userAiModel: state.user ? getSelectedUserAiModel() : "",
     userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
     allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false,
+    allowAiRepairSuggestions: state.userAiSettings.aiRepairSuggestions !== false,
     hasNutritionFacts: state.selectedProductType === "food" ? state.labelHasNutritionFacts : "not_applicable",
     frontImage,
     backImage,
@@ -5459,6 +5572,7 @@ async function syncPendingAnalyses() {
           userAiModel: state.user ? getSelectedUserAiModel() : item.payload.userAiModel || "",
           userAiVerifyUnknownIngredients: Boolean(state.user && state.userAiSettings.apiKey && state.userAiSettings.verifyUnknownIngredients !== false),
           allowSharedDatabaseContribution: state.userAiSettings.contributeToDatabase !== false && item.payload.allowSharedDatabaseContribution !== false,
+          allowAiRepairSuggestions: state.userAiSettings.aiRepairSuggestions !== false && item.payload.allowAiRepairSuggestions !== false,
         };
         const response = await fetch(getAnalysisEndpoint(), {
           method: "POST",
@@ -6633,6 +6747,14 @@ function setInstallPlatform(platform) {
 }
 
 function switchView(view) {
+  if (isSimpleMode() && view === "guide") {
+    toast(getGuideUnavailableMessage());
+    view = "scan";
+  }
+  if (view === "guide" && !canUseGuide()) {
+    toast(getGuideUnavailableMessage());
+    view = state.user ? "forYou" : "home";
+  }
   state.activeView = view;
   document.body.classList.toggle("scan-view", view === "scan");
   document.body.classList.toggle("guide-view", view === "guide");
@@ -6661,6 +6783,7 @@ function switchView(view) {
   els.fallbackPanel.classList.toggle("view-hidden", isAppPage);
   els.navHistoryButton.classList.toggle("active", isHome);
   els.navForYouButton.classList.toggle("active", isForYou);
+  els.navGuideButton?.classList.toggle("active", isGuide);
   els.navScanButton.classList.toggle("active", view === "scan");
   els.navSearchButton.classList.toggle("active", isSearch);
   els.navSourcesButton.classList.remove("active");
@@ -6670,6 +6793,8 @@ function switchView(view) {
     if (state.user) renderRecentSearches();
     else renderSearchLoginPrompt();
   }
+  if (view === "scan") autoStartCameraIfAllowed();
+  else stopCamera();
 }
 
 function openSearchView() {
@@ -6692,6 +6817,29 @@ function showScannerView() {
   window.requestAnimationFrame(() => {
     scrollToScannerPanel("smooth");
   });
+}
+
+async function autoStartCameraIfAllowed() {
+  if (state.cameraActive || state.scanAutoStartPending || state.activeView !== "scan") return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) return;
+  state.scanAutoStartPending = true;
+  let scheduledStart = false;
+  try {
+    const permission = await getCameraPermissionState();
+    const canAutoStart = permission === "granted" || (permission !== "denied" && hasRememberedCameraAccess());
+    if (!canAutoStart) {
+      els.cameraHint.textContent = "Tap Scan once to allow camera access.";
+      return;
+    }
+    scheduledStart = true;
+    window.setTimeout(() => {
+      state.scanAutoStartPending = false;
+      if (state.activeView === "scan" && !state.cameraActive) startCamera({ auto: true });
+    }, 120);
+    return;
+  } finally {
+    if (!scheduledStart) state.scanAutoStartPending = false;
+  }
 }
 
 function scrollToScannerPanel(behavior = "smooth") {
@@ -6717,6 +6865,79 @@ function productStorageKey() {
 
 function userAiSettingsKey() {
   return `greenscan.ai-provider.${state.user?.id || state.user?.email || "guest"}`;
+}
+
+function guideSettingsKey() {
+  return `greenscan.guide-settings.${state.user?.id || state.user?.email || "guest"}`;
+}
+
+function appearanceStorageKey() {
+  return "greenscan.appearance.v1";
+}
+
+function appearancePromptKey() {
+  return `greenscan.appearancePrompted.${state.user?.id || state.user?.email || "guest"}`;
+}
+
+function defaultAppearanceSettings() {
+  return { mode: "default" };
+}
+
+function loadAppearanceSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(appearanceStorageKey()) || "{}");
+    return {
+      ...defaultAppearanceSettings(),
+      mode: saved.mode === "simple" ? "simple" : "default",
+    };
+  } catch {
+    return defaultAppearanceSettings();
+  }
+}
+
+function persistAppearanceSettings(settings = state.appearanceSettings) {
+  try {
+    localStorage.setItem(appearanceStorageKey(), JSON.stringify({
+      mode: settings?.mode === "simple" ? "simple" : "default",
+    }));
+  } catch {}
+}
+
+function isSimpleMode() {
+  return state.appearanceSettings?.mode === "simple";
+}
+
+function defaultGuideSettings() {
+  return { enabled: true };
+}
+
+function loadGuideSettings() {
+  try {
+    return {
+      ...defaultGuideSettings(),
+      ...JSON.parse(localStorage.getItem(guideSettingsKey()) || "{}"),
+    };
+  } catch {
+    return defaultGuideSettings();
+  }
+}
+
+function persistGuideSettings(settings = state.guideSettings) {
+  try {
+    localStorage.setItem(guideSettingsKey(), JSON.stringify({
+      enabled: settings?.enabled !== false,
+    }));
+  } catch {}
+}
+
+function canUseGuide() {
+  return Boolean(state.user?.email) && !isSimpleMode() && state.guideSettings?.enabled !== false;
+}
+
+function getGuideUnavailableMessage() {
+  if (!state.user?.email) return "Sign in with Google to use GreenScan Guide.";
+  if (isSimpleMode()) return "Guide is hidden in Simple mode. Switch to Default GreenScan in Appearance.";
+  return "Guide is turned off in Settings.";
 }
 
 function captureReferralCode() {
@@ -6750,9 +6971,96 @@ function normalizeReferralCode(value) {
 function openSettings() {
   switchView("settings");
   updateAccountUi();
+  updateAppearanceSettingsUi();
+  updateGuideSettingsUi();
   renderProductRegionSetting();
   els.settingsDialog.showModal();
   loadReferralStatus();
+}
+
+function openAppearanceSettings() {
+  updateAppearanceSettingsUi();
+  els.settingsDialog?.close();
+  els.appearanceDialog?.showModal();
+}
+
+function updateAppearanceSettingsUi() {
+  const mode = isSimpleMode() ? "simple" : "default";
+  els.appearanceModeRadios?.forEach((radio) => {
+    radio.checked = radio.value === mode;
+  });
+  setSettingsActionCopy(
+    els.appearanceButton,
+    isSimpleMode() ? "Appearance: Simple" : "Appearance: Default",
+    isSimpleMode()
+      ? "Focused on Home, History, Scan, and Search."
+      : "Full GreenScan with Guide and advanced checks."
+  );
+}
+
+function saveAppearanceSettings() {
+  const selected = els.appearanceModeRadios?.find((radio) => radio.checked)?.value || "default";
+  setAppearanceMode(selected);
+  els.appearanceDialog?.close();
+  toast(isSimpleMode() ? "Simple mode is on." : "Default GreenScan is on.");
+}
+
+function chooseAppearanceFromPrompt(mode) {
+  setAppearanceMode(mode);
+  markAppearancePromptSeen();
+  els.appearancePromptDialog?.close();
+  toast(isSimpleMode() ? "Simple mode is ready." : "Default GreenScan is ready.");
+}
+
+function markAppearancePromptSeen() {
+  try {
+    localStorage.setItem(appearancePromptKey(), "true");
+  } catch {}
+}
+
+function hasSeenAppearancePrompt() {
+  try {
+    return localStorage.getItem(appearancePromptKey()) === "true";
+  } catch {
+    return true;
+  }
+}
+
+function maybeShowAppearancePrompt() {
+  if (!state.user?.email || hasSeenAppearancePrompt()) return;
+  window.setTimeout(() => {
+    if (state.user?.email && !hasSeenAppearancePrompt() && typeof els.appearancePromptDialog?.showModal === "function") {
+      els.appearancePromptDialog.showModal();
+    }
+  }, 420);
+}
+
+function setAppearanceMode(mode) {
+  state.appearanceSettings = {
+    ...defaultAppearanceSettings(),
+    mode: mode === "simple" ? "simple" : "default",
+  };
+  persistAppearanceSettings();
+  applyAppearanceMode();
+  updateAppearanceSettingsUi();
+  updateAccountUi();
+  renderHistory();
+  if (isSimpleMode() && state.activeView === "guide") {
+    closeGuide();
+    switchView("scan");
+  }
+}
+
+function applyAppearanceMode() {
+  const simple = isSimpleMode();
+  document.body.classList.toggle("simple-mode", simple);
+  const forYouLabel = els.navForYouButton?.querySelector("span");
+  if (forYouLabel) forYouLabel.textContent = simple ? "History" : "For you";
+  els.navForYouButton?.setAttribute("aria-label", simple ? "Open history" : "Open For you");
+  els.navSourcesButton?.classList.toggle("simple-hidden", simple);
+  els.navGuideButton?.classList.toggle("simple-hidden", simple);
+  updateAppearanceSettingsUi();
+  updateGuideSettingsUi();
 }
 
 async function loadReferralStatus() {
@@ -6820,6 +7128,71 @@ function openChangelog() {
   els.changelogDialog.showModal();
 }
 
+function openGuideSettings() {
+  if (!state.user) {
+    toast("Sign in to manage Guide settings.");
+    loginWithGoogle();
+    return;
+  }
+  state.guideSettings = loadGuideSettings();
+  updateGuideSettingsUi();
+  els.guideSettingsDialog?.showModal();
+}
+
+function saveGuideSettings() {
+  if (!state.user) {
+    toast("Sign in to manage Guide settings.");
+    return;
+  }
+  state.guideSettings = {
+    ...defaultGuideSettings(),
+    enabled: els.guideEnabledToggle?.checked !== false,
+  };
+  persistGuideSettings();
+  updateGuideSettingsUi();
+  if (!canUseGuide() && state.activeView === "guide") {
+    state.guideMessages = [];
+    state.guideProduct = null;
+    closeGuide();
+  }
+  els.guideSettingsDialog?.close();
+  toast(state.guideSettings.enabled ? "Guide is on." : "Guide is off.");
+}
+
+function updateGuideSettingsUi() {
+  const enabled = state.guideSettings?.enabled !== false;
+  if (els.guideEnabledToggle) els.guideEnabledToggle.checked = enabled;
+  const limit = Math.max(1, Number(state.guideLimit?.limit || 8));
+  const remaining = Math.max(0, Math.min(limit, Number(state.guideLimit?.remaining ?? limit)));
+  const unlimited = Boolean(state.guideLimit?.unlimited);
+  const personalGuide = !String(els.guideModelSelect?.value || "greenscan::greenscan").startsWith("greenscan::");
+  let label = "";
+  let pct = Math.round((remaining / limit) * 100);
+  if (!state.user) {
+    label = "Sign in to use Guide.";
+    pct = 0;
+  } else if (!enabled) {
+    label = "Guide is turned off.";
+    pct = 0;
+  } else if (personalGuide) {
+    label = "Your API key is active. No GreenScan Guide daily limit.";
+    pct = 100;
+  } else if (unlimited) {
+    label = "Unlimited Guide access.";
+    pct = 100;
+  } else {
+    label = `${remaining} of ${limit} prompts left today.`;
+  }
+  if (els.guideSettingsUsageText) els.guideSettingsUsageText.textContent = label;
+  if (els.guideSettingsUsageBar) els.guideSettingsUsageBar.style.width = `${pct}%`;
+  els.guideSettingsButton?.classList.toggle("guide-disabled", state.user && !enabled);
+  els.navGuideButton?.classList.toggle("guide-disabled", state.user && !enabled);
+  if (els.openGuideFromSettingsButton) {
+    els.openGuideFromSettingsButton.disabled = !canUseGuide();
+    els.openGuideFromSettingsButton.textContent = state.user ? "Open Guide" : "Sign in to use Guide";
+  }
+}
+
 function openAiProvider() {
   if (!state.user) {
     toast("Log in to add your own AI key.");
@@ -6833,6 +7206,9 @@ function openAiProvider() {
   }
   if (els.contributeToDatabaseToggle) {
     els.contributeToDatabaseToggle.checked = state.userAiSettings.contributeToDatabase !== false;
+  }
+  if (els.aiRepairSuggestionsToggle) {
+    els.aiRepairSuggestionsToggle.checked = state.userAiSettings.aiRepairSuggestions !== false;
   }
   updateAiProviderAdvancedVisibility();
   renderAiProviderProfiles();
@@ -6889,8 +7265,12 @@ function saveAiProvider() {
     apiKey,
     model,
     profiles,
+    useGreenScanAi: false,
+    guideProvider: state.userAiSettings.guideProvider === "greenscan" ? provider : state.userAiSettings.guideProvider,
+    guideModel: state.userAiSettings.guideProvider === "greenscan" ? model : state.userAiSettings.guideModel,
     verifyUnknownIngredients: els.verifyUnknownIngredientsToggle?.checked !== false,
     contributeToDatabase: els.contributeToDatabaseToggle?.checked !== false,
+    aiRepairSuggestions: els.aiRepairSuggestionsToggle?.checked !== false,
   };
   persistUserAiSettings();
   els.aiProviderDialog.close();
@@ -6900,17 +7280,31 @@ function saveAiProvider() {
 }
 
 function clearAiProvider() {
-  state.userAiSettings = defaultUserAiSettings();
-  localStorage.removeItem(userAiSettingsKey());
-  els.userAiKey.value = "";
+  const provider = state.userAiSettings.provider || els.aiProviderSelect?.value || "openai";
+  const model = normalizeSavedAiModel(provider, state.userAiSettings.model || getRecommendedAiModel(provider));
+  const savedProfile = state.userAiSettings.profiles?.[provider]?.apiKey
+    ? state.userAiSettings.profiles[provider]
+    : ((els.userAiKey?.value || "").trim() ? { apiKey: els.userAiKey.value.trim(), model } : null);
+  state.userAiSettings = {
+    ...state.userAiSettings,
+    provider,
+    apiKey: "",
+    model,
+    profiles: savedProfile ? { [provider]: { apiKey: savedProfile.apiKey, model: normalizeSavedAiModel(provider, savedProfile.model || model) } } : {},
+    useGreenScanAi: true,
+    guideProvider: "greenscan",
+    guideModel: "greenscan",
+  };
+  persistUserAiSettings();
   if (els.verifyUnknownIngredientsToggle) els.verifyUnknownIngredientsToggle.checked = true;
   if (els.contributeToDatabaseToggle) els.contributeToDatabaseToggle.checked = true;
-  renderAiModelOptions();
+  if (els.aiRepairSuggestionsToggle) els.aiRepairSuggestionsToggle.checked = true;
+  loadSelectedAiProviderProfile();
   updateAiProviderAdvancedVisibility();
   els.aiProviderDialog.close();
   updateAccountUi();
   renderGuideModelOptions();
-  toast("Using GreenScan AI.");
+  toast(savedProfile?.apiKey ? "Using GreenScan AI. Your favorite key is still saved." : "Using GreenScan AI.");
 }
 
 function loadSettings() {
@@ -6932,9 +7326,14 @@ function loadUserAiSettings() {
       if (firstSavedProvider) saved.provider = firstSavedProvider;
     }
     const active = saved.profiles[saved.provider] || {};
-    saved.apiKey = active.apiKey || saved.apiKey || "";
+    saved.useGreenScanAi = Boolean(saved.useGreenScanAi);
+    saved.apiKey = saved.useGreenScanAi ? "" : (active.apiKey || saved.apiKey || "");
     saved.model = normalizeSavedAiModel(saved.provider, active.model || saved.model || getRecommendedAiModel(saved.provider));
     saved.profiles = active.apiKey ? { [saved.provider]: { apiKey: active.apiKey, model: saved.model } } : {};
+    if (saved.useGreenScanAi) {
+      saved.guideProvider = "greenscan";
+      saved.guideModel = "greenscan";
+    }
     return saved;
   } catch {
     return defaultUserAiSettings();
@@ -6963,10 +7362,12 @@ function defaultUserAiSettings() {
     apiKey: "",
     model: "gpt-5.4",
     profiles: {},
+    useGreenScanAi: false,
     guideProvider: "greenscan",
     guideModel: "greenscan",
     verifyUnknownIngredients: true,
     contributeToDatabase: true,
+    aiRepairSuggestions: true,
   };
 }
 
@@ -7023,6 +7424,14 @@ function normalizeSavedAiModel(provider, model) {
 }
 
 function openGuide(options = {}) {
+  if (!canUseGuide()) {
+    toast(getGuideUnavailableMessage());
+    if (!state.user?.email) {
+      loginWithGoogle();
+    }
+    updateGuideSettingsUi();
+    return;
+  }
   if (!state.user?.email) {
     toast("Sign in with Google to use GreenScan Guide.");
     loginWithGoogle();
@@ -7046,14 +7455,132 @@ function openGuide(options = {}) {
   }
 }
 
+function startGuideAction(action = "select") {
+  const normalizedAction = ["select", "matters", "restrictions", "alternatives"].includes(action) ? action : "select";
+  if (normalizedAction !== "select" && state.guideProduct) {
+    runGuideActionForProduct(normalizedAction, state.guideProduct);
+    return;
+  }
+  openGuideProductPicker(normalizedAction);
+}
+
+function openGuideProductPicker(action = "select") {
+  state.guidePendingAction = action;
+  const titles = {
+    select: "What should Guide check?",
+    matters: "Choose a product for the quick takeaway",
+    restrictions: "Choose a product to check against your restrictions",
+    alternatives: "Choose a product to find better options",
+  };
+  if (els.guideToolTitle) els.guideToolTitle.textContent = titles[action] || titles.select;
+  els.guideWelcome?.classList.add("tool-open");
+  els.guideToolPanel?.classList.remove("hidden");
+  els.guideSearchSection?.classList.add("hidden");
+  if (els.guideToolSearchInput) els.guideToolSearchInput.value = "";
+  renderGuidePickerProducts(els.guideHistoryProducts, getHistory().slice(0, 8), "No recent scans yet. Search for a product above.");
+  els.guideHistorySection?.classList.toggle("hidden", !state.user);
+  window.setTimeout(() => els.guideToolSearchInput?.focus(), 60);
+}
+
+function closeGuideProductPicker() {
+  els.guideWelcome?.classList.remove("tool-open");
+  els.guideToolPanel?.classList.add("hidden");
+  els.guideSearchSection?.classList.add("hidden");
+  if (els.guideToolSearchInput) els.guideToolSearchInput.value = "";
+}
+
+async function searchGuideProducts(event) {
+  event?.preventDefault?.();
+  const query = String(els.guideToolSearchInput?.value || "").trim();
+  if (query.length < 2) return toast("Type a product name or barcode first.");
+  const allowed = await consumeSearchUsage();
+  if (!allowed) return;
+  els.guideSearchSection?.classList.remove("hidden");
+  if (els.guideSearchStatus) els.guideSearchStatus.textContent = "Searching...";
+  if (els.guideSearchProducts) els.guideSearchProducts.innerHTML = `<div class="guide-picker-empty">Checking GreenScan and open databases...</div>`;
+  try {
+    const grouped = await Promise.all([
+      fetchSavedProductSearch(query),
+      ...productSearchClients.map((client) => fetchProductSearch(client, query)),
+    ]);
+    const products = dedupeSearchResults(grouped.flat()).slice(0, 10).map(getSearchResultAnalysis);
+    if (els.guideSearchStatus) els.guideSearchStatus.textContent = `${products.length} found`;
+    renderGuidePickerProducts(els.guideSearchProducts, products, "No matching products found. Try a brand or shorter name.");
+  } catch {
+    if (els.guideSearchStatus) els.guideSearchStatus.textContent = "Search failed";
+    renderGuidePickerProducts(els.guideSearchProducts, [], "Search failed. Please try again.");
+  }
+}
+
+function renderGuidePickerProducts(container, products = [], emptyMessage = "No products found.") {
+  if (!container) return;
+  container.innerHTML = "";
+  if (!products.length) {
+    container.innerHTML = `<div class="guide-picker-empty">${escapeHtml(emptyMessage)}</div>`;
+    return;
+  }
+  products.forEach((entry) => {
+    const product = normalizeRenderableAnalysis(entry);
+    if (!product) return;
+    const score = Math.max(0, Math.min(100, Math.round(Number(product.safetyScore ?? product.safety_score ?? 0))));
+    const hasScore = product.hasGreenScanScore !== false && Number.isFinite(Number(product.safetyScore ?? product.safety_score));
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "guide-picker-product";
+    button.innerHTML = `
+      <img src="${escapeHtml(getHistoryImage(product))}" alt="${escapeHtml(product.name || "Product")}" loading="lazy" decoding="async" />
+      <span><strong>${escapeHtml(product.name || "Product")}</strong><small>${escapeHtml(product.brand || product.itemCategory || product.category || "GreenScan listing")}</small></span>
+      ${hasScore ? `<b class="${scoreColor(score)}">${score}</b>` : `<b>--</b>`}
+    `;
+    button.addEventListener("click", () => chooseGuidePickerProduct(product));
+    container.appendChild(button);
+  });
+}
+
+async function chooseGuidePickerProduct(product) {
+  const normalized = normalizeRenderableAnalysis(product);
+  if (!normalized) return toast("That product is not available right now.");
+  state.guideProduct = normalized;
+  state.guideMessages = [];
+  closeGuideProductPicker();
+  const action = state.guidePendingAction || "select";
+  if (action === "select") {
+    state.guideMessages = [{
+      role: "assistant",
+      content: `Selected **${normalized.name || "this product"}**. Ask about its ingredients, score, restrictions, or better options.`,
+    }];
+    renderGuideConversation();
+    window.setTimeout(() => els.guideInput?.focus(), 60);
+    return;
+  }
+  await runGuideActionForProduct(action, normalized);
+}
+
+async function runGuideActionForProduct(action, product) {
+  const name = product?.name || "this selected product";
+  const prompts = {
+    matters: `Tell me what matters most about ${name}. Focus on the biggest concerns, useful positives, and my restrictions.`,
+    restrictions: `Check ${name} against my dietary restrictions, personal avoid list, and saved preferences.`,
+    alternatives: `Find one or two better options than ${name} using GreenScan data. Respect my restrictions and avoid list, and ask me to choose if there are multiple matches.`,
+  };
+  const prompt = prompts[action] || `Explain ${name} using the selected GreenScan listing.`;
+  state.guideMessages = [];
+  els.guideInput.value = prompt;
+  renderGuideConversation();
+  await sendGuideMessage(new Event("submit"), { apiMessage: prompt });
+}
+
 function closeGuide() {
+  closeGuideProductPicker();
   switchView(state.guideReturnView && state.guideReturnView !== "guide" ? state.guideReturnView : "forYou");
 }
 
 function resetGuideChat() {
   stopGuideActivity();
+  closeGuideProductPicker();
   state.guideMessages = [];
   state.guideProduct = null;
+  if (els.guideInput) els.guideInput.placeholder = "Ask Guide...";
   renderGuideConversation();
   els.guideWelcome?.classList.remove("hidden");
   els.guideInput?.focus();
@@ -7092,7 +7619,10 @@ function saveGuideModelChoice() {
 }
 
 function updateGuideLimitText() {
-  if (!els.guideLimitText) return;
+  if (!els.guideLimitText) {
+    updateGuideSettingsUi();
+    return;
+  }
   const personal = !String(els.guideModelSelect?.value || "").startsWith("greenscan::");
   if (personal) {
     els.guideLimitText.textContent = "Your API key - no Guide daily limit";
@@ -7101,6 +7631,7 @@ function updateGuideLimitText() {
   } else {
     els.guideLimitText.textContent = `${Math.max(0, Number(state.guideLimit.remaining ?? 8))} prompts left today`;
   }
+  updateGuideSettingsUi();
 }
 
 function getGuideProductContext() {
@@ -7114,6 +7645,8 @@ function getGuideProductContext() {
     category: safe.category || "",
     itemCategory: safe.itemCategory || "",
     safetyScore: Number(safe.safetyScore || 0),
+    hasGreenScanScore: safe.hasGreenScanScore !== false && Number.isFinite(Number(safe.safetyScore)),
+    scoreColor: safe.scoreColor || scoreColor(Number(safe.safetyScore || 0)),
     summary: String(safe.summary || "").slice(0, 600),
     ingredients: (safe.ingredients || []).slice(0, 45).map((item) => ({
       name: item.rawName || item.normalizedName || "",
@@ -7124,19 +7657,20 @@ function getGuideProductContext() {
   };
 }
 
-async function sendGuideMessage(event) {
+async function sendGuideMessage(event, options = {}) {
   event?.preventDefault?.();
   if (state.guideBusy) return;
-  if (!state.user?.email) {
-    toast("Sign in with Google to use GreenScan Guide.");
+  if (!canUseGuide()) {
+    toast(getGuideUnavailableMessage());
     return;
   }
   const message = String(els.guideInput?.value || "").trim();
   if (!message) return;
-  if (state.guideMessages.length && isNewGuideProductRequest(message)) {
+  if (shouldStartFreshGuideForMessage(message)) {
     state.guideMessages = [];
     state.guideProduct = null;
   }
+  const apiMessage = String(options.apiMessage || message).trim();
   const [provider, model] = String(els.guideModelSelect?.value || "greenscan::greenscan").split("::");
   const profile = provider === "greenscan" ? null : state.userAiSettings?.profiles?.[provider];
   if (provider !== "greenscan" && !profile?.apiKey) {
@@ -7147,6 +7681,7 @@ async function sendGuideMessage(event) {
   state.guideMessages.push({ role: "user", content: message });
   state.guideMessages = state.guideMessages.slice(-10);
   els.guideInput.value = "";
+  els.guideInput.placeholder = "Ask Guide...";
   els.guideWelcome?.classList.add("hidden");
   state.guideBusy = true;
   startGuideActivity(message);
@@ -7156,7 +7691,7 @@ async function sendGuideMessage(event) {
       method: "POST",
       headers: await apiHeadersAsync({ "Content-Type": "application/json" }),
       body: JSON.stringify({
-        message,
+        message: apiMessage,
         messages: state.guideMessages.slice(0, -1),
         product: getGuideProductContext(),
         provider: provider === "greenscan" ? "" : provider,
@@ -7166,7 +7701,7 @@ async function sendGuideMessage(event) {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Guide could not respond.");
-    const responseProducts = Array.isArray(data.products) ? data.products.slice(0, 3) : [];
+    const responseProducts = filterGuideResponseProducts(Array.isArray(data.products) ? data.products.slice(0, 3) : [], data.needsProductChoice);
     if (!data.needsProductChoice && !state.guideProduct && responseProducts[0]?.barcode) {
       state.guideProduct = normalizeRenderableAnalysis(responseProducts[0]);
     }
@@ -7174,6 +7709,7 @@ async function sendGuideMessage(event) {
       role: "assistant",
       content: String(data.answer || "I could not create a useful answer from the available data."),
       products: responseProducts,
+      actions: Array.isArray(data.actions) ? data.actions.slice(0, 4) : [],
     });
     state.guideMessages = state.guideMessages.slice(-10);
     if (data.limit) state.guideLimit = { ...state.guideLimit, ...data.limit };
@@ -7208,6 +7744,77 @@ function updateGuideActivityClock() {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, "0");
   clock.textContent = `${minutes}:${seconds}`;
+}
+
+function filterGuideResponseProducts(products, needsProductChoice = false) {
+  if (needsProductChoice || !state.guideProduct) return products;
+  const selectedBarcode = normalizeBarcode(state.guideProduct.barcode);
+  const selectedName = normalizeGuideLookupText(state.guideProduct.name || "");
+  return products.filter((product) => {
+    const barcode = normalizeBarcode(product?.barcode);
+    if (selectedBarcode && barcode && selectedBarcode === barcode) return false;
+    const name = normalizeGuideLookupText(product?.name || product?.detected_product_name || "");
+    return !selectedName || !name || selectedName !== name;
+  });
+}
+
+function shouldStartFreshGuideForMessage(message) {
+  if (!state.guideMessages.length) return false;
+  const text = normalizeGuideLookupText(message);
+  if (!text) return false;
+  if (!state.guideProduct) return isNewGuideProductRequest(message);
+  if (isGuideFollowUpForCurrentProduct(text)) return false;
+  return messageLooksLikeDifferentGuideProduct(message);
+}
+
+function isGuideFollowUpForCurrentProduct(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return false;
+  if (/^(ingredients?|score|why|summary|summarize|what matters most|concerns?|positives?|nutrition|calories|better options?|alternatives?|swaps?)$/i.test(trimmed)) return true;
+  if (/^(what|why|how|can|could|should|does|do|is|are|tell|explain|compare)\b/i.test(trimmed) && !messageHasProductIdentity(trimmed)) return true;
+  return false;
+}
+
+function messageLooksLikeDifferentGuideProduct(message) {
+  const text = normalizeGuideLookupText(message);
+  if (!text) return false;
+  const currentText = normalizeGuideLookupText([
+    state.guideProduct?.brand,
+    state.guideProduct?.name,
+    state.guideProduct?.itemCategory,
+    state.guideProduct?.category,
+  ].filter(Boolean).join(" "));
+  const currentBarcode = normalizeBarcode(state.guideProduct?.barcode);
+  const barcode = normalizeBarcode(text.match(/\b\d{6,14}\b/)?.[0] || "");
+  if (barcode && currentBarcode && barcode !== currentBarcode) return true;
+  if (/\b(alternative|alternatives|swap|swaps|similar|safer|better options?)\b/.test(text)) return false;
+  if (!messageHasProductIdentity(text)) return false;
+  const messageTokens = getGuideIdentityTokens(text);
+  const currentTokens = new Set(getGuideIdentityTokens(currentText));
+  const unknownTokens = messageTokens.filter((token) => !currentTokens.has(token));
+  if (!currentTokens.size) return messageTokens.length >= 2;
+  return unknownTokens.length >= 2 || (unknownTokens.length >= 1 && /\b(find|search|look up|lookup|show me|what about|how about|check)\b/.test(text));
+}
+
+function messageHasProductIdentity(text) {
+  const value = String(text || "").toLowerCase();
+  if (/\b\d{6,14}\b/.test(value)) return true;
+  if (/\b(body\s*wash|bodywash|deodorant|antiperspirant|shampoo|conditioner|lotion|cream|soap|chips|drink|soda|snack|bar|spray|gel|stick|serum|cleanser|moisturizer)\b/.test(value)) return true;
+  return getGuideIdentityTokens(value).length >= 2;
+}
+
+function normalizeGuideLookupText(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function getGuideIdentityTokens(value) {
+  const stopWords = new Set([
+    "a", "an", "and", "are", "about", "can", "check", "compare", "do", "does", "explain", "find", "for", "how", "i", "is", "it", "look", "lookup", "me", "of", "or", "please", "product", "score", "search", "show", "tell", "the", "this", "to", "up", "what", "why", "with",
+    "ingredient", "ingredients", "deodorant", "antiperspirant", "soap", "shampoo", "conditioner", "lotion", "cream", "food", "drink", "body", "wash", "bodywash", "spray", "gel", "stick", "bar",
+  ]);
+  return normalizeGuideLookupText(value)
+    .split(" ")
+    .filter((token) => token.length >= 3 && !stopWords.has(token));
 }
 
 function isNewGuideProductRequest(message) {
@@ -7278,7 +7885,7 @@ function renderGuideConversation(showThinking = false) {
         return `
           <button type="button" data-guide-product="${escapeHtml(product.barcode || "")}" data-guide-product-index="${productIndex}">
             <span class="guide-product-copy">
-              <small class="guide-product-label">${product.externalSource ? `${escapeHtml(product.externalSource)} listing` : (selected ? "Selected product" : "Possible alternative")}${product.searchConfidence ? ` · ${escapeHtml(product.searchConfidence)}` : ""}</small>
+              <small class="guide-product-label">${product.externalSource ? `${escapeHtml(product.externalSource)} listing` : (selected ? "Selected product" : "Possible alternative")}${product.searchConfidence ? ` - ${escapeHtml(product.searchConfidence)}` : ""}</small>
               <strong>${escapeHtml(product.name || "Product")}</strong>
               <small>${escapeHtml(product.brand || product.itemCategory || "GreenScan listing")}</small>
               <small class="guide-product-ingredients">${ingredients.length ? `Ingredients: ${escapeHtml(ingredients.join(", "))}` : "Ingredient preview unavailable"}</small>
@@ -7289,6 +7896,11 @@ function renderGuideConversation(showThinking = false) {
               : `<span class="guide-product-unrated">Unrated</span>`}
           </button>`;
       }).join("")}</div>` : ""}
+      ${Array.isArray(message.actions) && message.actions.length ? `<div class="guide-action-row">${message.actions.map((action) => `
+        <button type="button" data-guide-action="${escapeHtml(action.type || "")}" data-guide-action-value="${escapeHtml(action.value || "")}">
+          ${escapeHtml(action.label || "Continue")}
+        </button>
+      `).join("")}</div>` : ""}
     </article>
   `).join("");
   const activitySeconds = state.guideActivityStartedAt ? Math.max(0, Math.floor((Date.now() - state.guideActivityStartedAt) / 1000)) : 0;
@@ -7328,15 +7940,48 @@ function renderGuideConversation(showThinking = false) {
         : null;
       const product = (barcode ? await getSharedSavedProduct(barcode) : null) || localProduct || attachedProduct;
       if (!product) return toast("That listing is not available right now.");
+      state.guideMessages = [];
       state.guideProduct = normalizeRenderableAnalysis(product);
-      els.guideInput.value = "Explain this selected product. Include its score, what matters most, and whether it fits my restrictions.";
+      const productName = state.guideProduct.name || "this selected product";
+      els.guideInput.value = `Review ${productName}`;
+      const reviewPrompt = [
+        `Review the selected product: ${productName}.`,
+        "Use only the selected currentProduct data supplied in context.",
+        "Give a practical answer with these parts: score meaning, what matters most, restriction or avoid-list matches, important ingredients, and a simple takeaway.",
+        "Be specific. Do not just repeat the product card. Do not include another product card unless you are showing a different better option.",
+      ].join(" ");
       renderGuideConversation();
-      await sendGuideMessage(new Event("submit"));
+      await sendGuideMessage(new Event("submit"), { apiMessage: reviewPrompt });
     });
+  });
+  els.guideMessages.querySelectorAll("[data-guide-action]").forEach((button) => {
+    button.addEventListener("click", () => handleGuideAction(button.dataset.guideAction || "", button.dataset.guideActionValue || ""));
   });
   els.guideSendButton.disabled = state.guideBusy;
   els.guideInput.disabled = state.guideBusy;
   window.requestAnimationFrame(() => els.guideMessages.scrollTo({ top: els.guideMessages.scrollHeight, behavior: "smooth" }));
+}
+
+function handleGuideAction(type, value = "") {
+  if (state.guideBusy) return;
+  if (type === "guide-search") {
+    els.guideInput.value = value ? `Search for ${value}` : "";
+    els.guideInput.focus();
+    return;
+  }
+  closeGuide();
+  showScannerView();
+  if (type === "barcode") {
+    window.setTimeout(() => els.barcodeInput?.focus(), 120);
+    return;
+  }
+  if (type === "label-photo") {
+    window.setTimeout(() => {
+      els.photoUploadPanel?.classList.remove("hidden");
+      els.ingredientPhoto?.focus?.();
+      scrollToResultSection("#photoUploadPanel");
+    }, 120);
+  }
 }
 
 function getGuideIngredientPreview(product) {
@@ -7351,8 +7996,8 @@ function renderGuideMessageContent(value) {
   const escaped = escapeHtml(String(value || "")).replace(/\*\*([^*\n]{1,240})\*\*/g, "<strong>$1</strong>");
   return escaped.split(/\n{2,}/).map((block) => {
     const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-    if (lines.length && lines.every((line) => /^-\s+/.test(line))) {
-      return `<ul>${lines.map((line) => `<li>${line.replace(/^-\s+/, "")}</li>`).join("")}</ul>`;
+    if (lines.length && lines.every((line) => /^(?:-|\*)\s+/.test(line))) {
+      return `<ul>${lines.map((line) => `<li>${line.replace(/^(?:-|\*)\s+/, "")}</li>`).join("")}</ul>`;
     }
     return `<p>${lines.join("<br>")}</p>`;
   }).join("");
@@ -8556,15 +9201,18 @@ function initAuth() {
     state.user = redirectedUser;
     state.accountSyncStarted = false;
     state.userAiSettings = loadUserAiSettings();
+    state.guideSettings = loadGuideSettings();
+    state.appearanceSettings = loadAppearanceSettings();
     loadPreferencesForCurrentAccount();
     saveGoogleUserProfile(state.user);
     localStorage.setItem("clearscan.user", JSON.stringify(state.user));
     requestPersistentAppStorage();
     window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-    updateAccountUi();
-    syncAccountData();
-    refreshAdminStatus();
-    return;
+  updateAccountUi();
+  maybeShowAppearancePrompt();
+  syncAccountData();
+  refreshAdminStatus();
+  return;
   }
 
   try {
@@ -8584,8 +9232,11 @@ function initAuth() {
     state.user = null;
   }
   state.userAiSettings = loadUserAiSettings();
+  state.guideSettings = loadGuideSettings();
+  state.appearanceSettings = loadAppearanceSettings();
   loadPreferencesForCurrentAccount();
   updateAccountUi();
+  maybeShowAppearancePrompt();
   if (hasAuthenticatedSession()) {
     initGoogleSignIn();
     syncAccountData();
@@ -8792,12 +9443,15 @@ function completeGoogleCredentialLogin(response) {
   requestPersistentAppStorage();
   state.accountSyncStarted = false;
   state.userAiSettings = loadUserAiSettings();
+  state.guideSettings = loadGuideSettings();
+  state.appearanceSettings = loadAppearanceSettings();
   loadPreferencesForCurrentAccount();
   localStorage.setItem("clearscan.user", JSON.stringify(state.user));
   updateAccountUi();
   renderHistory();
   syncAccountData();
   refreshAdminStatus();
+  maybeShowAppearancePrompt();
   switchView("forYou");
   window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
   toast("Logged in.");
@@ -8854,6 +9508,8 @@ function logout() {
   state.isAdmin = false;
   state.accountSyncStarted = false;
   state.userAiSettings = defaultUserAiSettings();
+  state.guideSettings = defaultGuideSettings();
+  state.appearanceSettings = loadAppearanceSettings();
   state.guideMessages = [];
   state.guideProduct = null;
   loadPreferencesForCurrentAccount();
@@ -8864,6 +9520,7 @@ function logout() {
     window.google?.accounts?.id?.disableAutoSelect?.();
   } catch {}
   updateAccountUi();
+  applyAppearanceMode();
   updateAdminButton();
   renderHistory();
   if (state.activeView === "forYou") switchView("home");
@@ -8883,15 +9540,31 @@ function revokeAccountSession() {
 function updateAccountUi() {
   if (state.user) {
     const providerLabel = getAiProviderLabel(state.userAiSettings.provider);
+    const favoriteSaved = Boolean(state.userAiSettings.profiles?.[state.userAiSettings.provider]?.apiKey);
+    const guideEnabled = state.guideSettings?.enabled !== false;
     els.accountTitle.textContent = state.user.name || state.user.email || "Signed in";
     els.accountNote.textContent = state.userAiSettings.apiKey
       ? `Signed in as ${state.user.email}. Using your ${providerLabel} API key.`
+      : favoriteSaved
+        ? `Signed in as ${state.user.email}. GreenScan AI is active. Your ${providerLabel} key is saved on this device.`
       : `Signed in as ${state.user.email}. GreenScan AI is provided by default.`;
     els.googleLoginButton.classList.add("hidden");
     els.signinPromptPanel.classList.add("hidden");
     els.logoutButton.classList.remove("hidden");
-    els.aiProviderButton.textContent = state.userAiSettings.apiKey ? `AI Provider: ${providerLabel}` : "AI Provider";
+    setSettingsActionCopy(
+      els.aiProviderButton,
+      state.userAiSettings.apiKey ? `AI Provider: ${providerLabel}` : favoriteSaved ? "AI Provider: GreenScan" : "AI Provider",
+      state.userAiSettings.apiKey ? "Using your key." : favoriteSaved ? `GreenScan AI is active. Your ${providerLabel} key is saved.` : "Use GreenScan AI or your own key."
+    );
+    setSettingsActionCopy(
+      els.guideSettingsButton,
+      guideEnabled ? "Guide" : "Guide: Off",
+      guideEnabled ? "Usage, learning mode, and optional AI help." : "Turn Guide back on when you want AI help."
+    );
     els.aiProviderButton.disabled = false;
+    if (els.guideSettingsButton) els.guideSettingsButton.disabled = false;
+    updateAppearanceSettingsUi();
+    updateGuideSettingsUi();
     updateSearchAccessUi();
     updateAdminButton();
     return;
@@ -8903,10 +9576,22 @@ function updateAccountUi() {
   els.signinPromptPanel.classList.remove("hidden");
   els.logoutButton.classList.add("hidden");
   els.referralCard?.classList.add("hidden");
-  els.aiProviderButton.textContent = "AI Provider";
+  setSettingsActionCopy(els.aiProviderButton, "AI Provider", "Sign in to use GreenScan AI or your own key.");
+  setSettingsActionCopy(els.guideSettingsButton, "Guide", "Sign in to use Guide.");
   els.aiProviderButton.disabled = true;
+  if (els.guideSettingsButton) els.guideSettingsButton.disabled = true;
+  updateAppearanceSettingsUi();
+  updateGuideSettingsUi();
   updateSearchAccessUi();
   updateAdminButton();
+}
+
+function setSettingsActionCopy(button, title, note) {
+  if (!button) return;
+  const strong = button.querySelector("strong");
+  const small = button.querySelector("small");
+  if (strong) strong.textContent = title;
+  if (small) small.textContent = note;
 }
 
 function updateSearchAccessUi() {

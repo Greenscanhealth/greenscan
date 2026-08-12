@@ -360,12 +360,12 @@
               </span>
               <div>
                 <p>GreenScan release</p>
-                <h3 id="landingReleaseTitle">Version 1.0.6</h3>
+                <h3 id="landingReleaseTitle">Version 1.0.7</h3>
               </div>
             </div>
             <div class="landing-release-update">
               <span>Latest update</span>
-              <strong>Ask Guide now helps choose the right product first, uses newer AI model recommendations, and has a cleaner chat experience.</strong>
+              <strong>Simple mode, a clearer full-screen scanner, and smarter Guide product matching make GreenScan easier for everyday scanning.</strong>
             </div>
             <div class="landing-service-status" id="landingServiceStatus" role="status" aria-live="polite">
               <span class="landing-service-dot checking" aria-hidden="true"></span>
@@ -448,16 +448,6 @@
           </div>
           <span class="friendly-home-status" aria-label="GreenScan is ready">Ready</span>
         </div>
-        <div class="friendly-dashboard-actions" aria-label="Quick actions">
-          <button type="button" class="friendly-search-action" id="historySearchButton">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
-            <span>Search products</span>
-          </button>
-          <button type="button" class="friendly-scan-action" id="historyScanButton">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 8v8M11 8v8M14 8v8M17 8v8" /></svg>
-            <span>Scan</span>
-          </button>
-        </div>
         <button type="button" class="guide-welcome-card" id="forYouGuideButton">
           <span class="guide-welcome-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H9l-4 3v-3a4 4 0 0 1-2-3.5V9a4 4 0 0 1 2-4Z" /><path d="m15.5 3 .55 1.45L17.5 5l-1.45.55L15.5 7l-.55-1.45L13.5 5l1.45-.55L15.5 3Z" /></svg>
@@ -495,7 +485,7 @@
           <div class="guide-header-actions">
             <button type="button" class="ghost-button" id="guideLearnButton">Learn more</button>
             <button type="button" class="icon-button" id="guideNewChatButton" aria-label="Start a new Guide chat" title="New chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg></button>
-            <button type="button" class="icon-button" id="guideCloseButton" aria-label="Close GreenScan Guide" title="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+            <button type="button" class="icon-button" id="guideCloseButton" aria-label="Close Guide" title="Close Guide"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
           </div>
         </header>
         <div class="guide-welcome" id="guideWelcome">
@@ -511,27 +501,52 @@
             <p>Ask about products, ingredients, scores, or your restrictions.</p>
           </div>
           <div class="guide-intro-grid">
-            <button type="button" data-guide-prompt="Help me find a product by name or barcode.">
+            <button type="button" data-guide-action="select">
               <span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg></span>
               <strong>Find a product</strong>
               <small>Search by name or barcode.</small>
             </button>
-            <button type="button" data-guide-prompt="Tell me what matters most about a product or ingredient. Focus on the biggest concerns, useful positives, and my restrictions.">
+            <button type="button" data-guide-action="matters">
               <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13c7 0 11-4 14-10 1 8-2 16-10 16H5v-6Z" /><path d="M5 19c3-5 7-8 14-10" /></svg></span>
               <strong>What matters most?</strong>
               <small>Get the quick takeaway.</small>
             </button>
-            <button type="button" data-guide-prompt="Check this against my restrictions, dietary filters, and personal avoid list.">
+            <button type="button" data-guide-action="restrictions">
               <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16" /><path d="M4 17h16" /><circle cx="9" cy="7" r="2" /><circle cx="15" cy="17" r="2" /></svg></span>
               <strong>Check my restrictions</strong>
               <small>Use your saved preferences.</small>
             </button>
-            <button type="button" data-guide-prompt="Find one or two better product options if available. Use GreenScan data first and respect my restrictions and avoid list.">
+            <button type="button" data-guide-action="alternatives">
               <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17 9 12l4 4 7-9" /><path d="M15 7h5v5" /></svg></span>
               <strong>Find better options</strong>
               <small>Compare cleaner matches.</small>
             </button>
           </div>
+          <section class="guide-tool-panel hidden" id="guideToolPanel" aria-label="Choose a product for Guide">
+            <div class="guide-tool-heading">
+              <button type="button" class="icon-button" id="guideToolBackButton" aria-label="Back to Guide choices" title="Back">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+              </button>
+              <div>
+                <p class="eyebrow">Choose a product</p>
+                <h3 id="guideToolTitle">What should Guide check?</h3>
+              </div>
+            </div>
+            <form class="guide-tool-search" id="guideToolSearchForm">
+              <input id="guideToolSearchInput" autocomplete="off" placeholder="Search a product or enter a barcode" />
+              <button type="submit" class="icon-button submit" aria-label="Search products" title="Search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
+              </button>
+            </form>
+            <div class="guide-tool-section" id="guideHistorySection">
+              <div class="guide-tool-section-title"><strong>From your history</strong><small>Choose a recent scan</small></div>
+              <div class="guide-picker-grid" id="guideHistoryProducts"></div>
+            </div>
+            <div class="guide-tool-section hidden" id="guideSearchSection">
+              <div class="guide-tool-section-title"><strong>Search results</strong><small id="guideSearchStatus"></small></div>
+              <div class="guide-picker-grid" id="guideSearchProducts"></div>
+            </div>
+          </section>
         </div>
         <div class="guide-messages" id="guideMessages" aria-live="polite"></div>
         <div class="guide-composer-shell">
@@ -546,6 +561,41 @@
           <p class="guide-disclaimer">Guide provides informational context, not medical advice. Always verify the current package label.</p>
         </div>
       </section>
+
+      <dialog id="guideInfoDialog">
+        <form method="dialog" class="sources-form guide-info-form">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">GreenScan Guide</p>
+              <h2>How Guide works</h2>
+            </div>
+            <button class="icon-button" value="close" aria-label="Close Guide info" title="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+            </button>
+          </div>
+          <div class="source-card">
+            <p class="eyebrow">Purpose</p>
+            <h3>A simpler way to understand products</h3>
+            <p>Guide explains GreenScan scores, ingredients, nutrition signals, restrictions, and possible product matches in plain language. It is built to help you choose more confidently, not to replace medical advice or the current package label.</p>
+          </div>
+          <div class="source-card">
+            <p class="eyebrow">What to ask</p>
+            <h3>Useful prompts</h3>
+            <p>Try product names, barcodes, ingredient questions, score questions, or personal checks like “does this fit my avoid list?” For product searches, type the actual product name or barcode so Guide can look for the right listing.</p>
+          </div>
+          <div class="source-card">
+            <p class="eyebrow">Product cards</p>
+            <h3>Pick before explaining</h3>
+            <p>When several products look similar, Guide shows cards first so you can choose the correct formula. After you pick one, Guide starts a focused chat for that product to avoid mixing ingredients or scores from different listings.</p>
+          </div>
+          <div class="source-card">
+            <p class="eyebrow">Privacy and limits</p>
+            <h3>Your choices stay protected</h3>
+            <p>Guide uses your signed-in GreenScan preferences, restrictions, and selected product context. Personal API keys stay on your device and are not synced to your account. Included GreenScan prompts have daily limits to keep the service sustainable.</p>
+          </div>
+          <button type="submit" class="secondary-button full dialog-close-action" value="close">Back to Guide</button>
+        </form>
+      </dialog>
 
       <section class="search-panel view-hidden">
         <div class="section-heading">
@@ -603,6 +653,10 @@
       <button type="button" class="nav-item" id="navForYouButton">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-7-11a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 6.6-7 11-7 11Z" /><path d="M9 13h6M12 10v6" /></svg>
         <span>For you</span>
+      </button>
+      <button type="button" class="nav-item guide-nav-item" id="navGuideButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H9l-4 3v-3a4 4 0 0 1-2-3.5V9a4 4 0 0 1 2-4Z" /><path d="m15.5 3 .55 1.45L17.5 5l-1.45.55L15.5 7l-.55-1.45L13.5 5l1.45-.55L15.5 3Z" /></svg>
+        <span>Guide</span>
       </button>
       <button type="button" class="nav-item" id="navScanButton">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 8v8" /><path d="M11 8v8" /><path d="M14 8v8" /><path d="M17 8v8" /></svg>
@@ -667,11 +721,23 @@
           </select>
         </section>
         <div class="settings-menu" aria-label="Settings options">
+          <button type="button" class="secondary-button full settings-action" id="appearanceButton">
+            <span class="settings-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
+            </span>
+            <span><strong>Appearance</strong><small>Choose Simple mode or full GreenScan.</small></span>
+          </button>
           <button type="button" class="secondary-button full settings-action" id="aiProviderButton">
             <span class="settings-action-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M12 2v4" /><path d="M12 18v4" /><path d="M4.93 4.93 7.76 7.76" /><path d="m16.24 16.24 2.83 2.83" /><path d="M2 12h4" /><path d="M18 12h4" /><path d="m4.93 19.07 2.83-2.83" /><path d="m16.24 7.76 2.83-2.83" /></svg>
             </span>
             <span><strong>AI Provider</strong><small>Use GreenScan AI or your own key.</small></span>
+          </button>
+          <button type="button" class="secondary-button full settings-action" id="guideSettingsButton">
+            <span class="settings-action-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" /><path d="M8 9h8" /><path d="M8 13h5" /></svg>
+            </span>
+            <span><strong>Guide</strong><small>Usage, learning mode, and optional AI help.</small></span>
           </button>
           <button type="button" class="secondary-button full settings-action" id="restrictionsButton">
             <span class="settings-action-icon" aria-hidden="true">
@@ -697,6 +763,120 @@
             </span>
             <span><strong>Admin Panel</strong><small>Manage users, reports, and product fixes.</small></span>
           </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="appearanceDialog">
+      <form method="dialog" class="settings-form appearance-form">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Appearance</p>
+            <h2>Choose your GreenScan</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="Close appearance settings" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <p class="settings-intro">Simple mode keeps GreenScan focused on scanning, search, and history. Default GreenScan keeps the full set of deeper checks and Guide tools.</p>
+        <div class="appearance-choice-grid" role="radiogroup" aria-label="GreenScan mode">
+          <label class="appearance-choice recommended">
+            <input type="radio" name="appearanceMode" value="simple" />
+            <span>
+              <small>Recommended for most people</small>
+              <strong>Simple mode</strong>
+              <em>Home, History, Scan, and Search only. Hides Guide, market checks, compare tools, and extra context cards.</em>
+            </span>
+          </label>
+          <label class="appearance-choice">
+            <input type="radio" name="appearanceMode" value="default" />
+            <span>
+              <small>Recommended for deeper research</small>
+              <strong>Default GreenScan</strong>
+              <em>Full GreenScan with Guide, advanced score context, data quality, country comparisons, and richer recommendations.</em>
+            </span>
+          </label>
+        </div>
+        <button type="button" class="primary-button full" id="saveAppearanceButton">Save appearance</button>
+      </form>
+    </dialog>
+
+    <dialog id="appearancePromptDialog" class="appearance-prompt-dialog">
+      <form method="dialog" class="settings-form appearance-prompt-form">
+        <div class="appearance-prompt-hero">
+          <span class="appearance-prompt-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
+          </span>
+          <p class="eyebrow">Welcome to GreenScan</p>
+          <h2>Pick the layout that fits you</h2>
+          <p>Most people just want fast scanning, history, and search. You can switch any time in Settings.</p>
+        </div>
+        <div class="appearance-choice-grid prompt-choice-grid" role="radiogroup" aria-label="Choose a GreenScan mode">
+          <button type="button" class="appearance-prompt-choice recommended" id="chooseSimpleModeButton">
+            <small>Recommended</small>
+            <strong>Simple mode</strong>
+            <span>Cleaner app with Home, History, Scan, and Search.</span>
+          </button>
+          <button type="button" class="appearance-prompt-choice" id="chooseDefaultModeButton">
+            <small>Full tools</small>
+            <strong>Default GreenScan</strong>
+            <span>Guide, market checks, data quality, and deeper product context.</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="guideSettingsDialog">
+      <form method="dialog" class="settings-form">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">GreenScan Guide</p>
+            <h2>Guide settings</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="Close Guide settings" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+          </button>
+        </div>
+        <section class="guide-settings-status" aria-labelledby="guideUsageTitle">
+          <div>
+            <p class="eyebrow">Daily usage</p>
+            <h3 id="guideUsageTitle">Guide is included for signed-in users</h3>
+            <p id="guideSettingsUsageText">8 prompts left today.</p>
+          </div>
+          <div class="guide-usage-bar" aria-hidden="true"><span id="guideSettingsUsageBar"></span></div>
+        </section>
+        <label class="settings-toggle-row guide-settings-toggle">
+          <input id="guideEnabledToggle" type="checkbox" />
+          <span>
+            <strong>Use GreenScan Guide</strong>
+            <small>On by default for signed-in users. Turn it off if you do not need AI help; scanning, search, history, and restrictions still work normally.</small>
+          </span>
+        </label>
+        <div class="guide-settings-grid">
+          <article class="source-card">
+            <p class="eyebrow">What it does</p>
+            <h3>Ask about products, ingredients, scores, and safer options</h3>
+            <p>Guide uses GreenScan product data, your saved restrictions, and your avoid list to explain results in simpler language.</p>
+          </article>
+          <article class="source-card">
+            <p class="eyebrow">Free while learning</p>
+            <h3>Included by default, with daily limits</h3>
+            <p>Guide is free right now as we improve it. Your feedback and optional database contributions help GreenScan's mission.</p>
+          </article>
+          <article class="source-card">
+            <p class="eyebrow">Access</p>
+            <h3>Signed-in accounts only</h3>
+            <p>Guests can keep scanning and searching, but Guide requires an account so limits, preferences, and safety controls work correctly.</p>
+          </article>
+          <article class="source-card">
+            <p class="eyebrow">Reminder</p>
+            <h3>Informational, not medical advice</h3>
+            <p>Always verify the current package label. Formulas can change by product, region, and date.</p>
+          </article>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="secondary-button" id="openGuideFromSettingsButton">Open Guide</button>
+          <button type="button" class="primary-button" id="saveGuideSettingsButton">Save Guide settings</button>
         </div>
       </form>
     </dialog>
@@ -981,7 +1161,7 @@
         <label>
           API key
           <input id="userAiKey" type="password" autocomplete="off" maxlength="600" spellcheck="false" placeholder="Paste your API key" />
-          <small>Saved only in this browser. Use “Use GreenScan AI” below to remove it.</small>
+          <small>Saved only in this browser. Use GreenScan AI below to switch back without deleting your saved key.</small>
         </label>
         <div class="ai-provider-options hidden" id="aiProviderAdvancedOptions" aria-label="AI provider options">
           <label>
@@ -1003,6 +1183,13 @@
               <small>Allow verified product scans to help improve the shared database. We would gladly appreciate if you kept this on, as it helps GreenScan's mission.</small>
             </span>
           </label>
+          <label class="settings-toggle-row">
+            <input id="aiRepairSuggestionsToggle" type="checkbox" />
+            <span>
+              <strong>Share AI repair suggestions</strong>
+              <small>If your AI scan spots a broken listing, missing ingredients, or a score mismatch, GreenScan can send a private repair draft to the admin queue for review. It will not edit the database automatically, and keeping this on helps support GreenScan's mission.</small>
+            </span>
+          </label>
         </div>
         <button type="button" class="primary-button full" id="saveAiProviderButton">Save favorite key</button>
         <button type="button" class="secondary-button full" id="clearAiProviderButton">Use GreenScan AI</button>
@@ -1022,6 +1209,17 @@
           </button>
         </div>
         <div class="changelog-list">
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">Version 1.0.7</p>
+            <h3>Simple mode and focused scanner</h3>
+            <ul>
+              <li>Added Simple mode for signed-in users who want a cleaner app with Scan, History, Search, and fewer advanced panels.</li>
+              <li>Made the mobile scanner open as the main experience with a clearer camera-first layout, auto-start support after camera permission is allowed, and a floating scan-style navigation bar while scanning.</li>
+              <li>Improved Ask Guide with signed-in usage settings, product-aware context switching, better product search hints, and safer alternative suggestions.</li>
+              <li>Added admin-reviewed Guide/AI repair suggestion support so suspicious listing fixes can be reviewed before changing the shared database.</li>
+              <li>Expanded ingredient normalization and catalog coverage for common food, skincare, and personal-care ingredients.</li>
+            </ul>
+          </article>
           <article class="source-card changelog-entry">
             <p class="eyebrow">Version 1.0.6</p>
             <h3>Guide product choice and model updates</h3>
