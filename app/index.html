@@ -18,6 +18,8 @@
     <link rel="icon" type="image/png" sizes="512x512" href="./greenscan-search-icon.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="preload" href="./zxing-browser.min.js" as="script" />
+    <link rel="preload" href="./quagga.min.js" as="script" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="GreenScan" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -360,12 +362,12 @@
               </span>
               <div>
                 <p>GreenScan release</p>
-                <h3 id="landingReleaseTitle">Version 1.0.7</h3>
+                <h3 id="landingReleaseTitle">Version 1.0.8</h3>
               </div>
             </div>
             <div class="landing-release-update">
               <span>Latest update</span>
-              <strong>Simple mode, a clearer full-screen scanner, and smarter Guide product matching make GreenScan easier for everyday scanning.</strong>
+              <strong>Faster cache-first barcode lookup, preloaded scanner libraries, barcode search, and clearer missing-product photo submission.</strong>
             </div>
             <div class="landing-service-status" id="landingServiceStatus" role="status" aria-live="polite">
               <span class="landing-service-dot checking" aria-hidden="true"></span>
@@ -611,7 +613,7 @@
         </div>
         <form class="search-form" id="productSearchForm">
           <div class="input-row">
-            <input id="productSearchInput" autocomplete="off" placeholder="Coca Cola, Lays, Dove..." />
+            <input id="productSearchInput" autocomplete="off" placeholder="Search name or enter UPC / EAN" />
             <button type="submit" class="icon-button submit" aria-label="Search products" title="Search products">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
             </button>
@@ -619,7 +621,7 @@
         </form>
         <div class="search-suggestions hidden" id="searchSuggestions"></div>
         <div class="search-results" id="productSearchResults">
-          <p>Search food, drinks, and beauty products by name.</p>
+          <p>Search food, drinks, and beauty products by name or enter a barcode.</p>
         </div>
         <section class="recent-searches" id="recentSearches">
           <div class="section-heading compact-heading">
@@ -1209,6 +1211,17 @@
           </button>
         </div>
         <div class="changelog-list">
+          <article class="source-card changelog-entry">
+            <p class="eyebrow">Version 1.0.8</p>
+            <h3>Faster barcode lookup and missing-product flow</h3>
+            <ul>
+              <li>Barcode scans now check recent device cache, saved local products, history, and favorites instantly before using network databases.</li>
+              <li>GreenScan saved listings are checked before Open Food Facts / Open Beauty Facts, with AI used only when a product still needs label photos.</li>
+              <li>Scanner libraries are preloaded and fallback readers are delayed so the fastest reader gets the first chance.</li>
+              <li>Search now accepts UPC / EAN barcodes directly, so manual barcode entry lives in Search too.</li>
+              <li>Fixed the product-not-found sheet so Food / Drink, Beauty / Hair, Other, Nutrition Facts, and photo upload choices are visible and tappable.</li>
+            </ul>
+          </article>
           <article class="source-card changelog-entry">
             <p class="eyebrow">Version 1.0.7</p>
             <h3>Simple mode and focused scanner</h3>

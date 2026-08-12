@@ -2499,6 +2499,20 @@ body.theme-dark .history-item.selected {
   background: var(--wash);
 }
 
+.missing-product-type-card {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(8, 35, 25, 0.5);
+}
+
+.missing-product-type-card .type-choice-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .product-type-panel h3,
 .nutrition-facts-panel h3 {
   margin: 0;
@@ -2507,7 +2521,7 @@ body.theme-dark .history-item.selected {
 
 .type-choice-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -11172,17 +11186,19 @@ body.scan-view .phone-qr-panel {
     display: none !important;
   }
 
-  body.scan-view.camera-active .controls-grid {
-    display: none !important;
+  body.scan-view .scan-frame {
+    top: 50%;
+    right: 7%;
+    left: 7%;
+    width: auto;
+    height: min(42dvh, 68vw);
+    z-index: 4;
+    transform: translateY(-54%);
   }
 
+  body.scan-view .controls-grid,
   body.scan-view .barcode-form {
-    right: 18px;
-    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 16px);
-    left: 18px;
-    z-index: 12;
-    padding: 0;
-    background: transparent;
+    display: none !important;
   }
 
   body.scan-view .barcode-form label {
@@ -11228,12 +11244,13 @@ body.scan-view .phone-qr-panel {
   }
 
   body.scan-view.camera-active .scan-frame {
-    top: 32%;
+    top: 50%;
     right: 7%;
     left: 7%;
-    width: 86%;
-    height: 34%;
+    width: auto;
+    height: min(42dvh, 68vw);
     z-index: 4;
+    transform: translateY(-54%);
   }
 
   body.scan-view.camera-active .scan-frame::after {
@@ -12063,6 +12080,103 @@ body.scan-view .phone-qr-panel {
 }
 
 @media (max-width: 720px) {
+  body.scan-view {
+    background: #000;
+  }
+
+  body.scan-view .app-shell {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.scan-view .scan-panel {
+    min-height: calc(100dvh - var(--bottom-nav-height));
+    border: 0;
+    background: radial-gradient(circle at 50% 42%, rgba(28, 138, 89, 0.22), rgba(0, 0, 0, 0.92) 62%);
+  }
+
+  body.scan-view .scanner-viewport {
+    height: calc(100dvh - var(--bottom-nav-height));
+    min-height: 560px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  body.scan-view .scanner-heading,
+  body.scan-view .scan-assist,
+  body.scan-view .result-panel:not(.has-result),
+  body.scan-view .fallback-panel,
+  body.scan-view .discovery-panel,
+  body.scan-view .status-panel,
+  body.scan-view .home-screen-panel,
+  body.scan-view .phone-qr-panel,
+  body.scan-view .permission-callout,
+  body.scan-view .barcode-form {
+    display: none !important;
+  }
+
+  body.scan-view .scan-frame {
+    top: 39%;
+    right: 8vw;
+    bottom: auto;
+    left: 8vw;
+    width: auto;
+    height: min(34dvh, 66vw);
+    z-index: 6;
+    transform: translateY(-50%);
+  }
+
+  body.scan-view .scan-frame::after {
+    display: none;
+  }
+
+  body.scan-view .scan-frame span {
+    width: 52px;
+    height: 52px;
+    border-color: rgba(255, 255, 255, 0.96);
+    filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.34));
+  }
+
+  body.scan-view .controls-grid {
+    display: none !important;
+  }
+
+  body.scan-view.camera-active .controls-grid,
+  body.scan-view.camera-active .scanner-empty {
+    display: none !important;
+  }
+
+  body.scan-view.camera-active .scanner-viewport {
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
+    min-height: 100dvh;
+    background: #000;
+  }
+
+  body.scan-view.camera-active .camera-tools {
+    position: fixed;
+    top: calc(72px + env(safe-area-inset-top, 0px));
+    right: max(24px, env(safe-area-inset-right));
+    left: max(24px, env(safe-area-inset-left));
+    z-index: 24;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  body.scan-view.camera-active .camera-tool-button {
+    width: 68px;
+    height: 68px;
+    border: 0;
+    border-radius: 50%;
+    color: #08110d;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(16px);
+    pointer-events: auto;
+  }
+
   body.scan-view .result-panel.loading-result.has-result {
     position: fixed;
     right: max(16px, env(safe-area-inset-right));
@@ -12128,5 +12242,109 @@ body.scan-view .phone-qr-panel {
 
   body.scan-view .result-panel.loading-result.has-result .result-skeleton div span {
     height: 10px;
+  }
+}
+
+@media (max-width: 720px) {
+  body.scan-view .result-panel.has-result:not(.loading-result):not(.result-sheet-dismissed) {
+    position: fixed !important;
+    top: auto !important;
+    right: 0 !important;
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px)) !important;
+    left: 0 !important;
+    z-index: 70;
+    width: auto !important;
+    max-width: none !important;
+    height: min(78dvh, 720px) !important;
+    min-height: 0 !important;
+    max-height: calc(100dvh - var(--bottom-nav-height) - env(safe-area-inset-bottom, 0px)) !important;
+    margin: 0 !important;
+    padding: 0 24px calc(26px + env(safe-area-inset-bottom, 0px)) !important;
+    overflow-y: auto;
+    border: 1px solid rgba(118, 232, 194, 0.24);
+    border-bottom: 0;
+    border-radius: 30px 30px 0 0 !important;
+    color: #f1fff9;
+    background:
+      linear-gradient(180deg, rgba(5, 34, 22, 0.98), rgba(4, 24, 16, 0.98));
+    box-shadow: 0 -26px 70px rgba(0, 0, 0, 0.58);
+    transform: translateY(calc(100% - 308px)) !important;
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result).sheet-expanded {
+    transform: translateY(0) !important;
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result) .result-sheet-handle {
+    position: sticky !important;
+    top: 0;
+    z-index: 8;
+    display: grid !important;
+    min-height: 62px;
+    margin: 0 -24px 14px;
+    padding: 10px 24px 9px;
+    place-items: center;
+    border: 0;
+    border-bottom: 1px solid rgba(126, 232, 196, 0.14);
+    background: linear-gradient(180deg, rgba(5, 34, 22, 0.98), rgba(5, 34, 22, 0.9));
+    box-shadow: none;
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result) .result-sheet-handle > span {
+    display: block !important;
+    width: 50px;
+    height: 6px;
+    margin: 0 0 7px;
+    border-radius: 999px;
+    background: rgba(232, 255, 247, 0.2);
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result) .result-sheet-handle small {
+    color: rgba(185, 255, 231, 0.82);
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    text-align: center;
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result) .score-card {
+    min-height: 150px;
+    padding: 4px 76px 14px 0;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result).sheet-expanded .score-card {
+    padding-right: 0;
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result) .product-missing-sheet {
+    min-height: 170px;
+    padding: 4px 0 18px;
+    align-content: start;
+    text-align: left;
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result) .product-missing-sheet h2 {
+    max-width: 100%;
+    margin-top: 4px;
+    font-size: clamp(1.45rem, 7vw, 2rem);
+    line-height: 1.05;
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result) .product-missing-sheet p {
+    max-width: 32rem;
+    margin-top: 8px;
+    color: rgba(218, 245, 235, 0.82);
+  }
+
+  body.scan-view .result-panel.has-result:not(.loading-result) .missing-product-action {
+    width: 100%;
+    max-width: 360px;
+    min-height: 54px;
+    margin-top: 16px;
+    border-radius: 999px;
   }
 }

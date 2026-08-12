@@ -10,6 +10,8 @@ const state = {
   scanCandidateAt: 0,
   scanStartedAt: 0,
   scanFallbackStarted: false,
+  zxingStartedAt: 0,
+  quaggaStarted: false,
   scanHelpShown: false,
   scanMatched: false,
   scanSoundMuted: localStorage.getItem("greenscan.scanSoundMuted") === "true",
@@ -304,12 +306,15 @@ const accountRegistrationStorageKey = "greenscan.accountRegistered.v1";
 const googleNonceStorageKey = "greenscan.googleNonce.v1";
 const pendingAnalysisStorageKey = "greenscan.pendingAnalysis.v1";
 const referralStorageKey = "greenscan.pendingReferral.v1";
+const recentBarcodeStorageKey = "greenscan.recentBarcodes.v1";
 
 const localCachePolicy = {
   historyLimit: 10,
   productLimit: 30,
   favoriteLimit: 18,
   recentSearchLimit: 8,
+  recentBarcodeLimit: 12,
+  recentBarcodeMaxAgeMs: 1000 * 60 * 60 * 12,
   notificationLimit: 15,
   pendingAnalysisLimit: 6,
   keepProductImages: 6,
@@ -947,8 +952,13 @@ function getDietaryFilterMatch(text) {
   return match ? labels[match] : "";
 }
 
-els.startCameraButton.addEventListener("click", startCamera);
+els.startCameraButton.addEventListener("click", () => startCamera({ userGesture: true }));
 els.stopCameraButton.addEventListener("click", stopCamera);
+els.scannerViewport.addEventListener("click", () => {
+  if (state.activeView === "scan" && !state.cameraActive && !state.scanAutoStartPending) {
+    startCamera({ userGesture: true });
+  }
+});
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stopCamera();
   else if (state.activeView === "scan") autoStartCameraIfAllowed();
@@ -1028,7 +1038,7 @@ els.navForYouButton.addEventListener("click", () => {
   window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
 });
 els.navGuideButton?.addEventListener("click", () => openGuide());
-els.navScanButton.addEventListener("click", () => showScannerView());
+els.navScanButton.addEventListener("click", () => showScannerView({ startCameraNow: true }));
 els.navSearchButton.addEventListener("click", openSearchView);
 els.navSourcesButton.addEventListener("click", openSourcesFromNav);
 document.querySelector("#historySearchButton")?.addEventListener("click", openSearchView);
@@ -1366,10 +1376,6 @@ async function startCamera(options = {}) {
       showCameraHelp("Camera permission is blocked. Open this page's site settings, allow Camera, then tap Scan again.");
       return;
     }
-    if (permission === "prompt" && options.auto && !hasRememberedCameraAccess()) {
-      els.cameraHint.textContent = "Tap Scan once to allow camera access.";
-      return;
-    }
     if (permission === "prompt") {
       els.cameraHint.textContent = "Starting camera...";
     } else if (permission === "granted") {
@@ -1458,6 +1464,8 @@ function resetScanForNextProduct() {
   resetUploadState();
   els.fallbackPanel.classList.add("hidden");
   resetProductTypeChoice();
+  state.zxingStartedAt = 0;
+  state.quaggaStarted = false;
   els.resultPanel.innerHTML = `
     <div class="empty-state">
       <p class="eyebrow">Ready</p>
@@ -1475,6 +1483,8 @@ function stopCamera() {
   state.torchSupported = false;
   state.torchOn = false;
   state.zxingReader = null;
+  state.zxingStartedAt = 0;
+  state.quaggaStarted = false;
   state.scanTimer = null;
   state.scanBusy = false;
   resetScanCandidate();
@@ -1587,7 +1597,7 @@ async function scanFrameForBarcode() {
 
 function maybeStartScannerFallback() {
   if (state.scanFallbackStarted || state.scanMatched || state.scanCandidateCount > 0) return;
-  if (!state.scanStartedAt || Date.now() - state.scanStartedAt < 1400) return;
+  if (!state.scanStartedAt || Date.now() - state.scanStartedAt < 1800) return;
   state.scanFallbackStarted = true;
   startNextScannerFallback("Still looking. Trying another barcode reader.");
 }
@@ -1608,6 +1618,7 @@ function startNextScannerFallback(message) {
 
 function startZxingScanner(message) {
   if (state.scanTimer) window.clearInterval(state.scanTimer);
+  state.zxingStartedAt = Date.now();
   state.zxingReader = new window.ZXingBrowser.BrowserMultiFormatOneDReader(undefined, {
     delayBetweenScanAttempts: 130,
     delayBetweenScanSuccess: 300,
@@ -1617,7 +1628,9 @@ function startZxingScanner(message) {
 }
 
 function startQuaggaScanner(message) {
+  if (state.quaggaStarted) return;
   if (state.scanTimer) window.clearInterval(state.scanTimer);
+  state.quaggaStarted = true;
   showCameraInfo(message);
   state.scanTimer = window.setInterval(scanFrameWithQuagga, 260);
 }
@@ -1635,10 +1648,21 @@ async function scanFrameWithZxing() {
   } catch (error) {
     if (!isExpectedScannerMiss(error) && window.Quagga) {
       startQuaggaScanner("Camera is running. Trying the backup barcode reader.");
+    } else if (shouldStartQuaggaAfterZxingMisses()) {
+      startQuaggaScanner("Still looking. Trying the backup barcode reader.");
     }
   } finally {
     state.scanBusy = false;
   }
+}
+
+function shouldStartQuaggaAfterZxingMisses() {
+  return Boolean(
+    window.Quagga &&
+    !state.quaggaStarted &&
+    state.zxingStartedAt &&
+    Date.now() - state.zxingStartedAt > 2600
+  );
 }
 
 function isExpectedScannerMiss(error) {
@@ -1677,15 +1701,50 @@ function scanFrameWithQuagga() {
 function getScanCanvasFrame() {
   const sourceWidth = els.cameraFeed.videoWidth || 640;
   const sourceHeight = els.cameraFeed.videoHeight || 480;
-  const maxScanSide = 900;
-  const scale = Math.min(1, maxScanSide / Math.max(sourceWidth, sourceHeight));
-  const scanWidth = Math.max(1, Math.round(sourceWidth * scale));
-  const scanHeight = Math.max(1, Math.round(sourceHeight * scale));
+  const crop = getScanFrameVideoCrop(sourceWidth, sourceHeight);
+  const maxScanSide = 820;
+  const scale = Math.min(1, maxScanSide / Math.max(crop.width, crop.height));
+  const scanWidth = Math.max(1, Math.round(crop.width * scale));
+  const scanHeight = Math.max(1, Math.round(crop.height * scale));
   state.scanCanvas.width = scanWidth;
   state.scanCanvas.height = scanHeight;
   const context = state.scanCanvas.getContext("2d", { willReadFrequently: true });
-  context.drawImage(els.cameraFeed, 0, 0, scanWidth, scanHeight);
+  context.drawImage(els.cameraFeed, crop.x, crop.y, crop.width, crop.height, 0, 0, scanWidth, scanHeight);
   return state.scanCanvas;
+}
+
+function getScanFrameVideoCrop(sourceWidth, sourceHeight) {
+  const viewportRect = els.scannerViewport.getBoundingClientRect();
+  const frameRect = els.scanFrame?.getBoundingClientRect?.();
+  if (!viewportRect.width || !viewportRect.height || !frameRect?.width || !frameRect?.height) {
+    return { x: 0, y: 0, width: sourceWidth, height: sourceHeight };
+  }
+
+  const videoAspect = sourceWidth / sourceHeight;
+  const viewportAspect = viewportRect.width / viewportRect.height;
+  const renderedWidth = videoAspect > viewportAspect ? viewportRect.height * videoAspect : viewportRect.width;
+  const renderedHeight = videoAspect > viewportAspect ? viewportRect.height : viewportRect.width / videoAspect;
+  const offsetX = (viewportRect.width - renderedWidth) / 2;
+  const offsetY = (viewportRect.height - renderedHeight) / 2;
+  const frameLeft = frameRect.left - viewportRect.left;
+  const frameTop = frameRect.top - viewportRect.top;
+  const paddingX = frameRect.width * 0.18;
+  const paddingY = frameRect.height * 0.2;
+  const visibleLeft = clamp(frameLeft - paddingX, 0, viewportRect.width);
+  const visibleTop = clamp(frameTop - paddingY, 0, viewportRect.height);
+  const visibleRight = clamp(frameLeft + frameRect.width + paddingX, 0, viewportRect.width);
+  const visibleBottom = clamp(frameTop + frameRect.height + paddingY, 0, viewportRect.height);
+  const x = clamp(((visibleLeft - offsetX) / renderedWidth) * sourceWidth, 0, sourceWidth - 1);
+  const y = clamp(((visibleTop - offsetY) / renderedHeight) * sourceHeight, 0, sourceHeight - 1);
+  const right = clamp(((visibleRight - offsetX) / renderedWidth) * sourceWidth, x + 1, sourceWidth);
+  const bottom = clamp(((visibleBottom - offsetY) / renderedHeight) * sourceHeight, y + 1, sourceHeight);
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(1, Math.round(right - x)),
+    height: Math.max(1, Math.round(bottom - y)),
+  };
 }
 
 function resetScanFrameGuide() {
@@ -1718,18 +1777,9 @@ async function handleDetectedBarcode(rawCode) {
   els.permissionCallout.classList.add("hidden");
   els.permissionCallout.classList.remove("success");
 
-  const now = Date.now();
-  const isRepeatCandidate = state.scanCandidate === barcode && now - state.scanCandidateAt < 1800;
   state.scanCandidate = barcode;
-  state.scanCandidateCount = isRepeatCandidate ? state.scanCandidateCount + 1 : 1;
-  state.scanCandidateAt = now;
-
-  if (state.scanCandidateCount < 2) {
-    els.barcodeInput.value = barcode;
-    els.cameraHint.textContent = `Check ${barcode} again`;
-    updateScanAssist("Almost got it", `Saw ${barcode}. Hold steady for one more read.`, 68);
-    return;
-  }
+  state.scanCandidateCount = 1;
+  state.scanCandidateAt = Date.now();
 
   state.scanMatched = true;
   if (state.scanTimer) window.clearInterval(state.scanTimer);
@@ -1739,7 +1789,7 @@ async function handleDetectedBarcode(rawCode) {
   els.scannerViewport.classList.add("scan-detected");
   playConfirmSound();
   captureScannerStill();
-  await delay(420);
+  await delay(160);
   stopCamera();
   await lookupBarcode(barcode);
 }
@@ -1937,38 +1987,55 @@ async function lookupBarcode(barcode, options = {}) {
   resetUploadState();
   resetProductTypeChoice();
 
-  setLoading(`Checking barcode ${barcode}`);
+  if (!options.backgroundRefresh) setLoading(`Checking barcode ${barcode}`);
   els.fallbackPanel.classList.add("hidden");
+
+  if (!options.backgroundRefresh && !options.sharedView) {
+    const localProduct = getLocalBarcodeProduct(barcode);
+    if (localProduct) {
+      renderResult(localProduct, { allowImageUpload: true, recentBarcodeHit: true });
+      updateScanAssist("Loaded instantly", "Refreshing this listing quietly in the background.", 86);
+      refreshRecentBarcodeInBackground(barcode);
+      toast("Loaded instantly from this device.");
+      return;
+    }
+  }
 
   const cachedProduct = getSavedProduct(barcode);
   const sharedProduct = await getSharedSavedProduct(barcode);
   if (sharedProduct) {
     const displayProduct = mergeLocalProductOverrides(sharedProduct, cachedProduct);
     if (!displayProduct.imageUrl) displayProduct.imageUrl = await findOpenDatabaseImageUrl(barcode);
-    renderResult(displayProduct, options.sharedView
-      ? { allowImageUpload: false, skipHistoryRender: true, formulaChangeNotice: getFormulaChangeNotice(sharedProduct) }
-      : { allowImageUpload: true, formulaChangeNotice: getFormulaChangeNotice(sharedProduct) });
+    if (!options.backgroundRefresh) {
+      renderResult(displayProduct, options.sharedView
+        ? { allowImageUpload: false, skipHistoryRender: true, formulaChangeNotice: getFormulaChangeNotice(sharedProduct) }
+        : { allowImageUpload: true, formulaChangeNotice: getFormulaChangeNotice(sharedProduct) });
+    }
     saveProductAnalysis(displayProduct);
+    rememberRecentBarcodeProduct(displayProduct);
     recordScannedLookup(displayProduct, "saved_database", options);
     if (options.sharedView) document.body.classList.add("public-product-page");
     if (needsIngredientFill(displayProduct)) {
       promptIngredientFill(displayProduct);
-      toast("This saved product needs ingredients.");
+      if (!options.backgroundRefresh) toast("This saved product needs ingredients.");
     } else {
-      toast("Loaded from database. No AI used.");
+      if (!options.backgroundRefresh) toast("Loaded from database. No AI used.");
     }
     return;
   }
 
-  if (cachedProduct) {
-    renderResult(cachedProduct, options.sharedView ? { allowImageUpload: false, skipHistoryRender: true } : { allowImageUpload: true });
+  if (cachedProduct && !options.backgroundRefresh) {
+    if (!options.backgroundRefresh) {
+      renderResult(cachedProduct, options.sharedView ? { allowImageUpload: false, skipHistoryRender: true } : { allowImageUpload: true });
+    }
+    rememberRecentBarcodeProduct(cachedProduct);
     recordScannedLookup(cachedProduct, "local_saved", options);
     if (options.sharedView) document.body.classList.add("public-product-page");
     if (needsIngredientFill(cachedProduct)) {
       promptIngredientFill(cachedProduct);
-      toast("This saved product needs ingredients.");
+      if (!options.backgroundRefresh) toast("This saved product needs ingredients.");
     } else {
-      toast("Loaded your saved ingredient analysis.");
+      if (!options.backgroundRefresh) toast("Loaded your saved ingredient analysis.");
     }
     return;
   }
@@ -1976,21 +2043,24 @@ async function lookupBarcode(barcode, options = {}) {
   const openProduct = await resolveOpenProduct(barcode);
   if (openProduct) {
     const { analysis, client } = openProduct;
-    renderResult(analysis, options.sharedView ? { allowImageUpload: false, skipHistoryRender: true } : { allowImageUpload: true });
+    if (!options.backgroundRefresh) {
+      renderResult(analysis, options.sharedView ? { allowImageUpload: false, skipHistoryRender: true } : { allowImageUpload: true });
+    }
+    rememberRecentBarcodeProduct(analysis);
     recordScannedLookup(analysis, client.name, options);
     if (options.sharedView) document.body.classList.add("public-product-page");
     if (needsIngredientFill(analysis)) {
       promptIngredientFill(analysis);
-      toast("No ingredients found. Add a label photo to fill it in.");
+      if (!options.backgroundRefresh) toast("No ingredients found. Add a label photo to fill it in.");
     }
     return;
   }
 
-  renderNotFound(barcode);
+  if (!options.backgroundRefresh) renderNotFound(barcode);
 }
 
 function recordScannedLookup(analysis, source, options = {}) {
-  if (options.sharedView || !analysis?.barcode) return;
+  if (options.sharedView || options.backgroundRefresh || !analysis?.barcode) return;
   updateScanStreak(analysis);
   saveProductAnalysis(analysis);
   saveHistory(analysis);
@@ -2081,6 +2151,14 @@ async function searchProducts(event) {
     runIngredientDictionarySearch(query);
     return;
   }
+  const barcode = getBarcodeFromSearchQuery(query);
+  if (barcode) {
+    hideSearchSuggestions();
+    els.productSearchInput.value = barcode;
+    showScannerView();
+    await lookupBarcode(barcode);
+    return;
+  }
   hideSearchSuggestions();
   await runProductSearch(query);
 }
@@ -2095,7 +2173,7 @@ function setSearchMode(mode) {
   const ingredients = state.searchMode === "ingredients";
   els.searchEyebrow.textContent = ingredients ? "Ingredient dictionary" : "Product search";
   els.searchTitle.textContent = ingredients ? "Search ingredients" : "Search products";
-  els.productSearchInput.placeholder = ingredients ? "Fragrance, Red 40, BHT..." : "Coca Cola, Lays, Dove...";
+  els.productSearchInput.placeholder = ingredients ? "Fragrance, Red 40, BHT..." : "Search name or enter UPC / EAN";
   els.productSearchResults.innerHTML = ingredients
     ? `<p>Search food additives, cosmetic chemicals, preservatives, dyes, fragrance, or allergens.</p>`
     : `<p>Search food, drinks, and beauty products by name.</p>`;
@@ -2137,6 +2215,12 @@ function chooseSearchSuggestion(value) {
 
 function hideSearchSuggestions() {
   if (els.searchSuggestions) els.searchSuggestions.classList.add("hidden");
+}
+
+function getBarcodeFromSearchQuery(query) {
+  const barcode = normalizeBarcode(query);
+  if (!barcode || barcode.length !== String(query || "").replace(/\s/g, "").length) return "";
+  return isSupportedBarcode(barcode) ? barcode : "";
 }
 
 function getIngredientSuggestions(query) {
@@ -5148,20 +5232,44 @@ function setLoading(message) {
 }
 
 function renderNotFound(barcode) {
-  clearResultSheet();
   els.resultPanel.classList.remove("loading-result");
   setFallbackHeading("Product not found", "Add full label photo");
   const offline = !navigator.onLine;
   els.resultPanel.innerHTML = `
-    <div class="empty-state">
+    <button type="button" class="result-sheet-handle" id="resultSheetHandle" aria-expanded="false">
+      <span aria-hidden="true"></span>
+      <small>Swipe up to add this product</small>
+    </button>
+    <div class="empty-state product-missing-sheet">
       <p class="eyebrow">${offline ? "Offline mode" : "No database match"}</p>
       <h2>${offline ? "Only saved GreenScan products are available offline." : `Barcode ${escapeHtml(barcode)} was not found.`}</h2>
-      <p>${offline ? "If this product is not already saved on this device, add label photos or pasted ingredients and GreenScan will queue it for analysis when internet returns." : "Choose whether this is food / drink or beauty before adding product photos."}</p>
+      <p>${offline ? "Add label photos or pasted ingredients and GreenScan will queue it when internet returns." : "Add a front photo and back label so GreenScan can analyze and save this product."}</p>
+      <div class="missing-product-type-card">
+        <p class="eyebrow">Choose product type</p>
+        <div class="type-choice-grid">
+          <button type="button" class="type-choice" data-missing-product-type="food">Food / Drink</button>
+          <button type="button" class="type-choice" data-missing-product-type="beauty">Beauty / Hair</button>
+          <button type="button" class="type-choice" data-missing-product-type="other">Other</button>
+        </div>
+      </div>
+      <button type="button" class="primary-action missing-product-action" id="missingProductSheetAction">
+        Add product photos
+      </button>
     </div>
   `;
   els.fallbackPanel.classList.remove("hidden");
   resetProductTypeChoice();
-  scrollToProductTypePanel();
+  prepareResultSheet();
+  const action = els.resultPanel.querySelector("#missingProductSheetAction");
+  const openMissingForm = (type = "") => {
+    setResultSheetExpanded(true);
+    if (["food", "beauty", "other"].includes(type)) chooseProductType(type);
+    scrollToProductTypePanel();
+  };
+  els.resultPanel.querySelectorAll("[data-missing-product-type]").forEach((button) => {
+    button.addEventListener("click", () => openMissingForm(button.dataset.missingProductType));
+  });
+  action?.addEventListener("click", () => openMissingForm());
   toast(offline ? "Offline. Known saved products still work." : "No open database match. Choose product type.");
 }
 
@@ -6005,6 +6113,83 @@ function getSavedProduct(barcode) {
   }
 }
 
+function getRecentBarcodeProducts() {
+  try {
+    const products = JSON.parse(localStorage.getItem(recentBarcodeStorageKey) || "{}");
+    return products && typeof products === "object" ? products : {};
+  } catch {
+    return {};
+  }
+}
+
+function getRecentBarcodeProduct(barcode) {
+  const clean = normalizeBarcode(barcode || "");
+  if (!clean) return null;
+  const entry = getRecentBarcodeProducts()[clean];
+  if (!entry?.analysis || Date.now() - Number(entry.savedAt || 0) > localCachePolicy.recentBarcodeMaxAgeMs) return null;
+  return normalizeRenderableAnalysis({
+    ...entry.analysis,
+    source: entry.analysis.source || "Recent scan",
+  });
+}
+
+function getLocalBarcodeProduct(barcode) {
+  const clean = normalizeBarcode(barcode || "");
+  if (!clean) return null;
+  const candidates = [
+    getRecentBarcodeProduct(clean),
+    getSavedProduct(clean),
+    ...getHistory().filter((item) => normalizeBarcode(item.barcode || "") === clean),
+    ...getFavoriteProducts().filter((item) => normalizeBarcode(item.barcode || "") === clean),
+  ].filter(Boolean);
+  if (!candidates.length) return null;
+  const scored = candidates
+    .map((item, index) => {
+      const safe = normalizeRenderableAnalysis(item);
+      const updated = Date.parse(safe?.correctedAt || safe?.savedAt || safe?.createdAt || "") || 0;
+      const ingredientCount = Array.isArray(safe?.ingredients) ? safe.ingredients.length : 0;
+      const imageScore = safe?.imageUrl ? 1 : 0;
+      return { safe, rank: updated + ingredientCount * 1000 + imageScore * 100 + (candidates.length - index) };
+    })
+    .filter((entry) => entry.safe);
+  scored.sort((a, b) => b.rank - a.rank);
+  return scored[0]?.safe || null;
+}
+
+function rememberRecentBarcodeProduct(analysis) {
+  const safeAnalysis = normalizeRenderableAnalysis(analysis);
+  const barcode = normalizeBarcode(safeAnalysis?.barcode || "");
+  if (!barcode || barcode === "photo-only") return;
+  try {
+    const products = getRecentBarcodeProducts();
+    products[barcode] = {
+      savedAt: Date.now(),
+      analysis: compactProductAnalysis({
+        ...safeAnalysis,
+        source: safeAnalysis.source || "Recent scan",
+      }, 0),
+    };
+    const next = Object.fromEntries(
+      Object.entries(products)
+        .sort(([, a], [, b]) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+        .slice(0, localCachePolicy.recentBarcodeLimit)
+    );
+    localStorage.setItem(recentBarcodeStorageKey, JSON.stringify(next));
+  } catch {
+    // Recent barcode cache is an optimization only.
+  }
+}
+
+function refreshRecentBarcodeInBackground(barcode) {
+  window.setTimeout(async () => {
+    try {
+      await lookupBarcode(barcode, { backgroundRefresh: true, skipHistoryRender: true });
+    } catch {
+      // Keep the instant result if refresh fails.
+    }
+  }, 80);
+}
+
 async function getSharedSavedProduct(barcode) {
   if (!barcode) return null;
   try {
@@ -6811,12 +6996,15 @@ function scrollToSearchBar() {
   window.setTimeout(() => els.productSearchInput.focus(), 250);
 }
 
-function showScannerView() {
+function showScannerView(options = {}) {
   switchView("scan");
   setResultSheetExpanded(false);
   window.requestAnimationFrame(() => {
     scrollToScannerPanel("smooth");
   });
+  if (options.startCameraNow && !state.cameraActive && !state.scanAutoStartPending) {
+    startCamera({ userGesture: true });
+  }
 }
 
 async function autoStartCameraIfAllowed() {
@@ -6826,9 +7014,8 @@ async function autoStartCameraIfAllowed() {
   let scheduledStart = false;
   try {
     const permission = await getCameraPermissionState();
-    const canAutoStart = permission === "granted" || (permission !== "denied" && hasRememberedCameraAccess());
-    if (!canAutoStart) {
-      els.cameraHint.textContent = "Tap Scan once to allow camera access.";
+    if (permission === "denied") {
+      els.cameraHint.textContent = "Camera permission is blocked in site settings.";
       return;
     }
     scheduledStart = true;
