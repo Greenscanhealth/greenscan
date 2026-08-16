@@ -26,6 +26,12 @@ GreenScan is designed to stay useful when a phone temporarily loses internet:
 - Queue entries are deduplicated by barcode, product type, label text, and image fingerprint so the same item is not submitted repeatedly.
 - New AI analysis still requires internet and a configured AI provider/API key.
 
+## Contributing Product Data
+
+GreenScan can save corrected product listings, missing-label submissions, and useful scan updates to GreenScan's servers so future scans load faster and the shared database improves for everyone.
+
+Users who do not want to contribute data can turn this off in the app settings. Keeping it on is strongly appreciated because it supports GreenScan's mission, helps products open faster for other users, and has no cost to you. It does not give GreenScan access to your personal API keys, and self-hosted GitHub copies must use their own server/API setup.
+
 ## GreenScan Guide
 
 GreenScan Guide is the signed-in AI assistant built into GreenScan and co-created with Saz3 Labs. It can:
